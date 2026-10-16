@@ -1,0 +1,34 @@
+{
+  "configurations": [
+    {
+      "name": "8051 (SDCC)",
+      "includePath": [
+        "${workspaceFolder}/src",
+        "${env:HOME}/.local/sdcc/share/sdcc/include/mcs51",
+        "${env:HOME}/.local/sdcc/share/sdcc/include"
+      ],
+      "defines": [
+        "__SDCC",
+        "__interrupt(x)=",
+        "__using(x)=",
+        "__at(x)=",
+        "__sfr=volatile unsigned char",
+        "__sfr16=volatile unsigned short",
+        "__sbit=volatile _Bool",
+        "__bit=_Bool",
+        "__code=",
+        "__data=",
+        "__idata=",
+        "__xdata=",
+        "__pdata=",
+        "__reentrant=",
+        "__asm=",
+        "__endasm="
+      ],
+      "compilerPath": "",
+      "cStandard": "c11",
+      "intelliSenseMode": "clang-x64"
+    }
+  ],
+  "version": 4
+}

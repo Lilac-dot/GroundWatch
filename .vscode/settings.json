@@ -1,0 +1,9 @@
+{
+  // 8051 project: use Microsoft C/C++ here, keep the STM32 clangd off in this folder only.
+  "C_Cpp.intelliSenseEngine": "default",
+  "stm32cube-ide-clangd.enable": false,
+  "stm32cube-ide-clangd.detectExtensionConflicts": false,
+  "makefile.configureOnOpen": false,
+  "cmake.configureOnOpen": false,
+  "files.exclude": { "build": true }
+}

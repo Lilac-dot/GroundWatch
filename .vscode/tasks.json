@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build firmware",
+      "type": "shell",
+      "command": "make",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": {
+        "owner": "sdcc",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.*):(\\d+):\\s+(warning|error)\\s+\\d*:?\\s*(.*)$",
+          "file": 1, "line": 2, "severity": 3, "message": 4
+        }
+      }
+    },
+    { "label": "Test fusion table", "type": "shell", "command": "make test", "group": "test" },
+    { "label": "Clean", "type": "shell", "command": "make clean" },
+    { "label": "PC: list serial ports", "type": "shell", "command": "python3 tools/groundwatch_pc.py --list" },
+    {
+      "label": "PC: live log + plot",
+      "type": "shell",
+      "command": "python3 tools/groundwatch_pc.py ${input:port} --label '${input:label}'"
+    },
+    { "label": "PC: demo (no board)", "type": "shell", "command": "python3 tools/groundwatch_pc.py --demo --out demo.csv" }
+  ],
+  "inputs": [
+    { "id": "port", "type": "promptString", "description": "Serial port (run 'PC: list serial ports')", "default": "/dev/cu.usbserial-0001" },
+    { "id": "label", "type": "pickString", "description": "What are you recording?",
+      "options": ["", "background", "footstep", "vehicle", "digging", "animal"] }
+  ]
+}
