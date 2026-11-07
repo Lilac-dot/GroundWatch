@@ -6,6 +6,8 @@ Three piezo discs buried along a boundary pick up ground vibration. A PIR sensor
 
 Built for the Microprocessors and Microcontrollers (MPMC) course project by Tishya Yadlapalli, Dhanvitha Sankuratri and Naseeb.
 
+**Status (Nov 2026):** firmware complete and the rule table passes its host-side tests (`tests/`). All components are in hand and the hardware is being wired up; on-board testing and threshold tuning from real recordings come next.
+
 ## Why
 
 A camera needs light and line of sight. A single PIR sensor gives false alarms and says nothing about what moved or where. Ground vibration works in the dark and through vegetation, and the timing across several sensors shows where the source is. GroundWatch combines the vibration data with three cheap sensors to separate real intrusions from wind, rain and wildlife.
@@ -69,6 +71,7 @@ tools/
   groundwatch_pc.py  serial logger, CSV export and live plot
 docs/
   slides.pdf     project presentation
+  hardware_connections.md   full wiring checklist (.docx alongside)
 ```
 
 ## Hardware
@@ -77,7 +80,7 @@ docs/
 |---|---|
 | AT89S52 or P89V51 (8052-compatible), 11.0592 MHz | controller |
 | 3x piezo disc, 2x LM358 | vibration sensing and amplification |
-| ADC0808 | 8-channel 8-bit ADC |
+| ADC0808 / ADC0809 | 8-channel 8-bit ADC |
 | HC-SR501 | PIR body detection |
 | QMC5883L (GY-271) | vehicle detection via magnetic field |
 | Analog microphone module | digging and tool noise |
@@ -89,6 +92,9 @@ The firmware needs about 5 KB of flash and uses the upper 128 bytes of internal 
 
 ### Pin map
 
+Full wiring checklist, including power, decoupling and the clock divider: [`docs/hardware_connections.md`](docs/hardware_connections.md) (also as [.docx](docs/hardware_connections.docx)).
+
+
 | Signal | Pin | Notes |
 |---|---|---|
 | ADC0808 D0-D7 | P1.0-P1.7 | ADC pin 2^-8 (LSB) to P1.0 |
@@ -96,7 +102,7 @@ The firmware needs about 5 KB of flash and uses the upper 128 bytes of internal 
 | ADC0808 ALE + START | P0.3 | tie both ADC pins together |
 | ADC0808 OE | P0.4 | |
 | ADC0808 EOC | P0.5 | |
-| ADC0808 CLOCK | 8051 ALE / 2 | 74HC74 divider gives 921.6 kHz |
+| ADC0808 CLOCK | 8051 ALE / 2 | 74HC74 / 74LS74 divider gives 921.6 kHz |
 | Piezo L, C, R | ADC IN0-IN2 | through LM358 stages |
 | Microphone | ADC IN3 | |
 | LDR divider | ADC IN4 | LDR to 5 V, 10k to GND |
