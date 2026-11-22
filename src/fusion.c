@@ -1,13 +1,13 @@
 /*
- * Sensor fusion (slide 6). Plain C with no 8051 registers, so tests/ can
- * run it on the Mac.
+ * Sensor fusion. Plain C with no 8051 registers, so tests/ can run it on the Mac.
+ * The magnetometer and microphone were dropped, so vehicles are no longer a
+ * separate class and digging is judged from the piezos alone.
  *
- *   Event       Piezo                  PIR   Magnetometer  Sound
- *   Vehicle     any hit                any   large change  -
- *   Wind/rain   any                    no    no change     any      -> ignore
- *   Digging     strong                 yes   no change     bursts
- *   Person      medium, regular rhythm yes   no change     -
- *   Animal      weak or irregular      yes   no change     -        -> log only
+ *   Event       Piezo                          PIR
+ *   Wind/rain   any                            no    -> ignore
+ *   Digging     strong, DIG_HITS or more hits  yes   -> alarm
+ *   Person      medium, regular rhythm         yes   -> alarm
+ *   Animal      weak or irregular              yes   -> log only
  */
 #include "fusion.h"
 
@@ -42,9 +42,8 @@ uint8_t fusion_classify(const window_t *w, uint8_t z)
     if (z == ZONE_NONE) return EV_NONE;
     pk = w->peak[z];
 
-    if (w->mag_dev >= MAG_THR) return EV_VEHICLE;
-    if (!w->pir)               return EV_NOISE;
-    if (pk >= STRONG_PEAK && w->snd_bursts >= DIG_BURSTS) return EV_DIGGING;
+    if (!w->pir) return EV_NOISE;
+    if (pk >= STRONG_PEAK && w->hits[z] >= DIG_HITS) return EV_DIGGING;
     if (pk >= MED_PEAK && regular(w, z))                  return EV_PERSON;
     return EV_ANIMAL;
 }

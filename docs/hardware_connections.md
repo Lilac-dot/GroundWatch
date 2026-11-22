@@ -19,8 +19,8 @@ Complete Hardware Connection Checklist**
 
 | **From / part**                                        | **Connect to**                                                                                                        | **Notes**                                                                         |
 |--------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------|
-| Regulated +5 V rail                                    | 8051 board +5 V / VCC rail, ADC VCC, 74LS74 pin 14, LM358 VCC                                                         | Only if these components are designed for 5 V. Check module voltage requirements. |
-| Ground rail                                            | 8051 board GND, ADC GND, 74LS74 pin 7, LM358 GND, sensor grounds, LCD GND, buzzer-driver emitter ground, USB-UART GND | All grounds must be common.                                                       |
+| Regulated +5 V rail                                    | 8051 board +5 V / VCC rail, ADC VCC, 74LS74 pin 14, LM358 VCC (pin 8 on DIP-8)                                        | Only if these components are designed for 5 V. Check module voltage requirements. |
+| Ground rail                                            | 8051 board GND, ADC GND, 74LS74 pin 7, LM358 GND (pin 4), PIR GND, LCD GND, buzzer-driver emitter ground, USB-UART GND | All grounds must be common.                                                       |
 | 74LS74 pin 14                                          | +5 V                                                                                                                  | Logic supply.                                                                     |
 | 74LS74 pin 7                                           | GND                                                                                                                   | Logic ground.                                                                     |
 | 74LS74 pins 1 (/CLR1) and 4 (/PRE1)                    | +5 V                                                                                                                  | Active-low asynchronous controls held inactive; do not leave floating.            |
@@ -64,7 +64,7 @@ Port 0 on a classic 8051 is open-drain. Add external 10 kΩ pull-ups to +5 V on 
 | Left piezo disc            | Piezo → LM358 amplifier stage → ADC IN0                   | Use a suitable piezo input/protection and amplifier circuit; do not connect the bare piezo directly to the ADC.     |
 | Centre piezo disc          | Piezo → LM358 amplifier stage → ADC IN1                   | Second/appropriate amplifier channel.                                                                               |
 | Right piezo disc           | Piezo → LM358 amplifier stage → ADC IN2                   | Use a stable ground/reference and keep signal wiring short.                                                         |
-| Analogue microphone module | Analogue OUT → ADC IN3                                    | Use the analogue output, not a digital threshold output. Check module output stays within ADC range.                |
+| (unused)                   | ADC IN3, IN5–IN7                                          | Microphone removed. Tie unused inputs to GND rather than leaving them floating.                                    |
 | LDR divider                | +5 V → LDR → ADC IN4 node → 10 kΩ resistor → GND          | Connect the ADC IN4 wire to the junction between LDR and 10 kΩ resistor.                                            |
 | LM358                      | VCC → +5 V; GND/V− → GND; output(s) → assigned ADC inputs | Pin numbers depend on package; check LM358 datasheet. Ensure output is never negative or above ADC reference range. |
 
@@ -74,20 +74,9 @@ Port 0 on a classic 8051 is open-drain. Add external 10 kΩ pull-ups to +5 V on 
 |-------------------------------|----------------------------------------------------------|--------------------------------------------------------------------------------------------------------------|
 | HC-SR501 VCC                  | Module-rated supply (often 5 V)                          | Check the exact module marking/specification.                                                                |
 | HC-SR501 GND                  | Common GND                                               | Required.                                                                                                    |
-| HC-SR501 OUT                  | NPN inverter input/base through a suitable base resistor | Firmware expects motion to pull P3.2 low, so use the inverter stage.                                         |
-| NPN inverter collector/output | P3.2 / INT0, with pull-up to +5 V                        | Confirm transistor pinout before wiring; emitter to GND. Output logic should be HIGH idle and LOW on motion. |
+| HC-SR501 OUT                  | 8051 P3.2, direct (no inverter)                          | Active high: about 3.3 V on motion, 0 V idle. The AT89S52 reads anything above about 1.9 V as high, so no level shifting is needed. Firmware polls the pin every 10 ms. |
 
-# 6. QMC5883L / GY-271 magnetometer
-
-| **Module pin**       | **Connect to**                                         | **Notes**                                                                                                                       |
-|----------------------|--------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
-| VCC                  | Supply supported by your specific module               | Do not assume all GY-271 boards have the same regulator/level shifting.                                                         |
-| GND                  | Common GND                                             | Required.                                                                                                                       |
-| SCL                  | 8051 P3.4                                              | I²C clock.                                                                                                                      |
-| SDA                  | 8051 P3.5                                              | I²C data.                                                                                                                       |
-| SCL and SDA pull-ups | 4.7 kΩ to the correct logic rail if not already fitted | Avoid duplicate/incorrect pull-ups. Confirm voltage compatibility; add level shifting if required by module and 5 V 8051 logic. |
-
-# 7. 16×2 LCD (HD44780-compatible, 4-bit mode)
+# 6. 16×2 LCD (HD44780-compatible, 4-bit mode)
 
 | **LCD signal**    | **8051 connection**                                           | **Notes**                                     |
 |-------------------|---------------------------------------------------------------|-----------------------------------------------|
@@ -104,16 +93,16 @@ Port 0 on a classic 8051 is open-drain. Add external 10 kΩ pull-ups to +5 V on 
 | D0–D3             | Not connected                                                 | Unused in 4-bit mode; follow LCD datasheet.   |
 | LED backlight A/K | As specified by module; use current limiting if not built in  | Do not assume the module includes a resistor. |
 
-# 8. Buzzer and alarm LED
+# 7. Buzzer and alarm LED
 
 | **From**                          | **To**                             | **Notes**                                                                                                   |
 |-----------------------------------|------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| 8051 P2.2                         | BC547 base through a base resistor | Firmware: HIGH = buzzer ON. Do not drive a high-current buzzer directly from the MCU pin.                   |
-| BC547 emitter                     | GND                                | Confirm transistor pinout for your exact package.                                                           |
-| BC547 collector                   | Buzzer negative terminal           | Buzzer positive terminal to its rated supply. For magnetic/inductive buzzers, add a suitable flyback diode. |
+| 8051 P2.2                         | BC547 / BC548 base through a base resistor | Firmware: HIGH = buzzer ON. Do not drive a high-current buzzer directly from the MCU pin.                   |
+| BC547 / BC548 emitter             | GND                                | Confirm transistor pinout for your exact package.                                                           |
+| BC547 / BC548 collector           | Buzzer negative terminal           | Buzzer positive terminal to its rated supply. For magnetic/inductive buzzers, add a suitable flyback diode. |
 | +5 V → 330 Ω resistor → LED anode | LED cathode → P2.3                 | Firmware LED is active-low: P2.3 LOW = ON. Confirm polarity.                                                |
 
-# 9. USB-UART serial logging
+# 8. USB-UART serial logging
 
 | **From**         | **To**                         | **Notes**                                                      |
 |------------------|--------------------------------|----------------------------------------------------------------|
@@ -122,7 +111,7 @@ Port 0 on a classic 8051 is open-drain. Add external 10 kΩ pull-ups to +5 V on 
 | USB-UART TX      | 8051 P3.0 / RXD only if needed | Not required for one-way logging; use compatible logic levels. |
 | USB-UART adapter | Computer USB                   | Use 9600 baud, 8 data bits, no parity, 1 stop bit (9600 8N1).  |
 
-# 10. Recommended bring-up order
+# 9. Recommended bring-up order
 
 1.  With power OFF, inspect polarity, shorts, IC orientation and common ground.
 
@@ -134,13 +123,13 @@ Port 0 on a classic 8051 is open-drain. Add external 10 kΩ pull-ups to +5 V on 
 
 5.  Only after ADC readings change correctly, connect one piezo amplifier to IN0; then add centre and right piezos.
 
-6.  Add microphone and LDR, then LCD, LED and transistor-driven buzzer.
+6.  Add the LDR to IN4, then LCD, LED and transistor-driven buzzer.
 
-7.  Add PIR inverter and magnetometer last; verify module voltage compatibility before connection.
+7.  Add the PIR output to P3.2 and check the pin reads high on motion.
 
 8.  Connect USB-UART and check the serial log at 9600 8N1.
 
-# 11. Do not guess these details
+# 10. Do not guess these details
 
 - Physical ADC0809CCN pin numbers: use the datasheet for the exact package and match each named signal before wiring.
 
@@ -148,7 +137,9 @@ Port 0 on a classic 8051 is open-drain. Add external 10 kΩ pull-ups to +5 V on 
 
 - Board header locations: use the MYTechCare MY8051 V2.1 silkscreen/schematic. The ALE header is not the PSEN header.
 
-- Sensor module power and I²C voltage: check the actual module revision, not only the sensor chip name.
+- Sensor module power: check the actual module revision, not only the sensor chip name.
+
+The QMC5883L magnetometer and the microphone were removed from the design in November 2026; `hardware_connections.docx` predates that change.
 
 **Firmware reference:** https://github.com/Lilac-dot/GroundWatch (README.md and src/config.h)
 

@@ -7,7 +7,7 @@ SDCC_BIN ?= $(HOME)/.local/sdcc/bin
 CC       = $(SDCC_BIN)/sdcc
 PACKIHX  = $(SDCC_BIN)/packihx
 CFLAGS   = -mmcs51 --model-small --iram-size 256 --code-size 8192 --std-sdcc11 -Isrc
-SRCS     = main.c sense.c adc0808.c fusion.c i2c.c qmc5883l.c uart.c lcd.c
+SRCS     = main.c sense.c adc0808.c fusion.c uart.c lcd.c
 HDRS     = $(wildcard src/*.h)
 
 all: build/groundwatch.hex

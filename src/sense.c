@@ -29,8 +29,6 @@ static volatile uint16_t ms_ticks;
 static uint16_t win_ms;
 static volatile uint8_t thr = PIEZO_THR_DAY;
 
-static uint16_t snd_base_q7;
-static volatile uint8_t snd_peak;
 static volatile uint8_t ldr;
 static uint8_t ldr_div;
 
@@ -55,7 +53,6 @@ void sense_init(void)
     adc_init();
     for (i = 0; i < N_PIEZO; i++)
         pz[i].base_q7 = (uint16_t)adc_read(i) << 7;
-    snd_base_q7 = (uint16_t)adc_read(CH_SOUND) << 7;
     ldr = adc_read(CH_LDR);
     piezo_reset();
 
@@ -103,12 +100,6 @@ void timer0_isr(void) __interrupt(1)
         }
     }
 
-    x = adc_read(CH_SOUND);
-    b = snd_base_q7 >> 7;
-    a = (x > b) ? x - b : b - x;
-    if (a < SOUND_THR) snd_base_q7 = snd_base_q7 - (snd_base_q7 >> 7) + x;
-    if (a > snd_peak) snd_peak = a;
-
     if (++ldr_div >= 10) {
         ldr_div = 0;
         ldr = adc_read(CH_LDR);
@@ -132,16 +123,6 @@ void delay_ms(uint16_t ms)
 
 void sense_set_threshold(uint8_t t) { thr = t; }
 uint8_t sense_ldr(void)             { return ldr; }
-
-uint8_t sense_sound_peak(void)
-{
-    uint8_t v;
-    EA = 0;
-    v = snd_peak;
-    snd_peak = 0;
-    EA = 1;
-    return v;
-}
 
 void sense_take_window(window_t *w)
 {

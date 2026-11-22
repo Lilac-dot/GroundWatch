@@ -14,8 +14,6 @@ typedef struct {
     uint8_t  first[N_PIEZO];     /* first hit, 8 ms units, T8_NONE = never */
     uint8_t  gap_min[N_PIEZO];   /* shortest / longest gap between hits, 8 ms units */
     uint8_t  gap_max[N_PIEZO];
-    uint16_t mag_dev;            /* largest |dX|+|dY|+|dZ| seen in the window */
-    uint8_t  snd_bursts;
     uint8_t  pir;
     uint8_t  night;
 } window_t;

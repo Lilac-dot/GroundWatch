@@ -1,4 +1,4 @@
-/* Checks the fusion table (slide 6) on the Mac: make test */
+/* Checks the fusion table on the Mac: make test */
 #include <stdio.h>
 #include <string.h>
 #include "fusion.h"
@@ -49,14 +49,18 @@ int main(void)
     w = quiet(); hits(&w, 0, 5, 20, 300, 10); w.pir = 1;
     expect("weak = animal", &w, 0, EV_ANIMAL);
 
-    w = quiet(); hits(&w, 0, 1, 30, 0, 700); hits(&w, 2, 1, 30, 0, 200); w.mag_dev = 900;
-    expect("vehicle, no PIR, zone R", &w, 2, EV_VEHICLE);
-
     w = quiet(); hits(&w, 1, 6, 150, 0, 0); w.gap_min[1] = 150 / 8; w.gap_max[1] = 700 / 8;
-    w.snd_bursts = 5; w.pir = 1;
+    w.pir = 1;
     expect("digging", &w, 1, EV_DIGGING);
 
-    w = quiet(); hits(&w, 1, 6, 150, 0, 0); w.snd_bursts = 5;
+    w = quiet(); hits(&w, 1, 2, 150, 0, 0); w.gap_min[1] = 150 / 8; w.gap_max[1] = 700 / 8;
+    w.pir = 1;
+    expect("two strong hits = not digging", &w, 1, EV_PERSON);
+
+    w = quiet(); hits(&w, 2, 1, 150, 0, 0); w.pir = 1;
+    expect("one strong hit = animal", &w, 2, EV_ANIMAL);
+
+    w = quiet(); hits(&w, 1, 6, 150, 0, 0);
     expect("strong hits, no PIR = noise", &w, 1, EV_NOISE);
 
     w = quiet(); hits(&w, 0, 2, 20, 400, 300); hits(&w, 1, 2, 22, 400, 300);

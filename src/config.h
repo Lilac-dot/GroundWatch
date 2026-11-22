@@ -14,17 +14,18 @@
 #include <stdint.h>
 
 /* ---------------- Pin map (slide 4) ----------------
- * P1.0-P1.7  <- ADC0808 D0..D7 (D0 = LSB, ADC pin 17 is "2^-8" = LSB)
+ * P1.0-P1.7  <- ADC0809 / ADC0808 D0..D7 (D0 = LSB, ADC pin 17 is "2^-8" = LSB)
  * P0.0-P0.2  -> ADC0808 ADD A, B, C
  * P0.3       -> ADC0808 ALE + START (tie both pins together)
  * P0.4       -> ADC0808 OE
  * P0.5       <- ADC0808 EOC
  *               Port 0 is open-drain: 10k pull-up to 5 V on P0.0..P0.5
- * P3.2 INT0  <- PIR (HC-SR501) through an NPN inverter: motion = low
- * P3.4 / P3.5 <-> I2C SCL / SDA to QMC5883L (4.7k pull-ups, see README)
+ * P3.2       <- PIR (HC-SR501) OUT, direct: motion = high (3.3 V, above
+ *               the 1.9 V VIH of the AT89S52). Polled every 10 ms, because
+ *               INT0 only fires on a falling edge.
  * P3.0 / P3.1 <-> UART RXD / TXD to USB-UART module
  * P2.0 RS, P2.1 EN, P2.4-P2.7 D4-D7 -> 16x2 LCD (RW to GND)
- * P2.2       -> buzzer through BC547 (high = on)
+ * P2.2       -> buzzer through BC547 / BC548 low-side switch (high = on)
  * P2.3       -> alarm LED, active low (5 V -> 330R -> LED -> pin)
  */
 #define ADC_DATA        P1
@@ -36,10 +37,7 @@
 #define ADC_EOC         P0_5
 
 #define PIR_PIN         P3_2
-#define PIR_ACTIVE()    (PIR_PIN == 0)      /* inverted by the NPN stage */
-
-#define I2C_SCL         P3_4
-#define I2C_SDA         P3_5
+#define PIR_ACTIVE()    (PIR_PIN == 1)      /* HC-SR501 output is active high */
 
 #define LCD_RS          P2_0
 #define LCD_EN          P2_1
@@ -55,13 +53,11 @@
 
 /* ---------------- ADC0808 channels ---------------- */
 #define N_PIEZO         3       /* IN0 = zone L, IN1 = zone C, IN2 = zone R */
-#define CH_SOUND        3
-#define CH_LDR          4
+#define CH_LDR          4       /* IN3, IN5-IN7 unused */
 
 /* ---------------- Timing (ms) ---------------- */
 #define WINDOW_MS       2000    /* classify period */
 #define HIT_DEADTIME_MS 150     /* one footstep rings for a while; count it once */
-#define BURST_GAP_MS    100     /* same idea for sound bursts */
 #define ALARM_MS        3000
 
 /* ---------------- Piezo thresholds (ADC counts above baseline, 8-bit) ---------------- */
@@ -71,19 +67,16 @@
 #define STRONG_PEAK     100     /* shovel / heavy impact */
 
 /* ---------------- Other sensors ---------------- */
-#define SOUND_THR       40      /* mic deviation that counts as a burst */
-#define DIG_BURSTS      3       /* bursts per window that mean digging */
-#define MAG_THR         300     /* |dX|+|dY|+|dZ| in raw counts (8 G range) */
+#define DIG_HITS        3       /* strong hits per window that mean digging */
 #define LDR_DARK        60      /* below this = night (LDR to 5 V, 10k to GND) */
 #define LDR_LIGHT       80      /* above this = day (hysteresis) */
 
 /* ---------------- Events ---------------- */
 #define EV_NONE         0       /* no piezo hit this window */
-#define EV_NOISE        1       /* wind / rain: hit but no PIR, no metal -> ignore */
+#define EV_NOISE        1       /* wind / rain: hit but no PIR -> ignore */
 #define EV_ANIMAL       2       /* log only */
 #define EV_PERSON       3       /* alarm */
-#define EV_VEHICLE      4       /* alarm */
-#define EV_DIGGING      5       /* alarm */
+#define EV_DIGGING      4       /* alarm */
 
 #define ZONE_NONE       0xFF
 

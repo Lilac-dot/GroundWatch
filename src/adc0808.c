@@ -1,5 +1,5 @@
 /*
- * ADC0808 driver. Data on P1, control on P0 (see config.h).
+ * ADC0808 / ADC0809 driver (same interface). Data on P1, control on P0 (see config.h).
  * The ADC needs its own clock (10 kHz - 1.28 MHz): divide the 8051's ALE pin
  * (11.0592 MHz / 6 = 1.84 MHz) by 2 with a 74HC74 -> 921.6 kHz.
  *

@@ -23,8 +23,8 @@ from datetime import datetime
 FIELDS = (["event", "zone"]
           + [f"peak_{z}" for z in "LCR"] + [f"hits_{z}" for z in "LCR"]
           + [f"active_ms_{z}" for z in "LCR"] + [f"first_ms_{z}" for z in "LCR"]
-          + ["mag_dev", "sound_bursts", "pir", "night", "ldr"])
-ALARM = {"PERSON", "VEHICLE", "DIGGING"}
+          + ["pir", "night", "ldr"])
+ALARM = {"PERSON", "DIGGING"}
 HISTORY = 60          # windows on screen (2 min)
 
 
@@ -47,22 +47,20 @@ def serial_lines(port, baud):
 
 def demo_lines():
     """Plausible fake windows so the plot can be tried without the board"""
-    yield "GW,ready,mag=1"
+    yield "GW,ready"
     while True:
         time.sleep(2)
-        ev = random.choices(["NONE", "NOISE", "ANIMAL", "PERSON", "VEHICLE", "DIGGING"],
-                            [40, 15, 10, 20, 8, 7])[0]
+        ev = random.choices(["NONE", "NOISE", "ANIMAL", "PERSON", "DIGGING"],
+                            [45, 15, 12, 20, 8])[0]
         z = random.randrange(3)
-        pk = {"NONE": 0, "NOISE": 30, "ANIMAL": 30, "PERSON": 70, "VEHICLE": 50, "DIGGING": 160}[ev]
+        pk = {"NONE": 0, "NOISE": 30, "ANIMAL": 30, "PERSON": 70, "DIGGING": 160}[ev]
         peaks = [max(0, pk - abs(i - z) * 20 + random.randint(-8, 8)) if pk else 0 for i in range(3)]
-        hits = [random.randint(1, 4) if p > 20 else 0 for p in peaks]
+        hits = [random.randint(3 if ev == "DIGGING" else 1, 5) if p > 20 else 0 for p in peaks]
         first = [str(200 + abs(i - z) * 40) if h else "-" for i, h in enumerate(hits)]
         yield ",".join(["EV", ev, "LCR"[z] if pk else "-"]
                        + [str(p) for p in peaks] + [str(h) for h in hits]
                        + [str(h * 60) for h in hits] + first
-                       + [str(900 if ev == "VEHICLE" else random.randint(0, 80)),
-                          str(5 if ev == "DIGGING" else random.randint(0, 1)),
-                          str(int(ev in ("ANIMAL", "PERSON", "DIGGING"))), "0", "140"])
+                       + [str(int(ev in ("ANIMAL", "PERSON", "DIGGING"))), "0", "140"])
 
 
 def reader(lines, rows, out_path, label, quiet):
@@ -88,7 +86,6 @@ def reader(lines, rows, out_path, label, quiet):
                 flag = "  <-- ALARM" if row["event"] in ALARM else ""
                 print(f"{now}  {row['event']:8} zone {row['zone']}  "
                       f"peaks L/C/R {row['peak_L']:>3} {row['peak_C']:>3} {row['peak_R']:>3}  "
-                      f"mag {row['mag_dev']:>4}  snd {row['sound_bursts']}  "
                       f"pir {row['pir']}{flag}")
 
 
@@ -115,10 +112,11 @@ def plot(rows):
         ax1.set_ylabel("piezo peak (ADC counts)")
         ax1.legend(loc="upper left", fontsize=8)
         ax1.set_title("Piezo peaks per 2 s window")
-        ax2.plot(x, [int(r["mag_dev"]) for r in data], color="#7a4fd6", label="mag dev")
-        ax2.bar(x, [int(r["sound_bursts"]) * 50 for r in data], color="#c9a227", alpha=0.5,
-                label="sound bursts x50")
-        ax2.set_ylabel("magnetometer / sound")
+        ax2.plot(x, [int(r["ldr"]) for r in data], color="#c9a227", label="LDR")
+        ax2.bar(x, [int(r["pir"]) * 255 for r in data], color="#7a4fd6", alpha=0.3,
+                label="PIR active")
+        ax2.set_ylim(0, 260)
+        ax2.set_ylabel("light / PIR")
         ax2.set_xlabel(f"window (last {HISTORY})")
         ax2.legend(loc="upper left", fontsize=8)
 
