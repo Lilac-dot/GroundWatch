@@ -54,6 +54,19 @@
       "label": "PC: demo (no board)",
       "type": "shell",
       "command": "python3 tools/groundwatch_pc.py --demo --out demo.csv"
+    },
+    {
+      "label": "Dashboard: serve on localhost:8000",
+      "type": "shell",
+      "command": "python3 -m http.server 8000 --directory dashboard",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Tests: replay a recording",
+      "type": "shell",
+      "command": "make replay && ./build/replay ${input:recording}",
+      "problemMatcher": []
     }
   ],
   "inputs": [
@@ -74,6 +87,12 @@
         "digging",
         "animal"
       ]
+    },
+    {
+      "id": "recording",
+      "type": "promptString",
+      "description": "Recording CSV",
+      "default": "recordings/"
     }
   ]
 }

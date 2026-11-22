@@ -79,8 +79,9 @@ tests/
   test_fusion.c  host-side tests for the rule table
 tools/
   groundwatch_pc.py  serial logger, CSV export and live plot
+dashboard/       live web dashboard (static HTML/JS, reads Supabase)
 database/
-  schema.sql     Supabase table and access rules
+  schema.sql     Supabase table, summary view and access rules
 docs/
   slides.pdf     project presentation
   hardware_connections.md   older wiring checklist (.docx alongside)
@@ -177,6 +178,25 @@ python3 tools/groundwatch_pc.py --demo --cloud            # fake rows, stored wi
 ```
 
 The laptop is the bridge: it reads the board's serial line and uploads each window in the background, holding rows in memory if the network drops. `.env` is git-ignored; the secret key can write to the database, so never commit it. The dashboard only reads, and only for signed-in team members.
+
+## Dashboard
+
+`dashboard/` is a static web page (no build step) that shows the live state of the boundary. It has a status card that turns red on an alarm, a map of the three zones, per-zone vibration over time, recent detections, alarms per hour, hits by zone and the light level. It reads from Supabase and updates live as the bridge uploads windows. Each chart has a table view.
+
+```sh
+cd dashboard && python3 -m http.server 8000     # then open http://localhost:8000
+```
+
+Open `http://localhost:8000/?preview` to see it with sample data generated in the browser, without signing in.
+
+**Accounts.** Only signed-in team members can read data:
+
+1. In Supabase, turn off **Authentication > Sign In / Providers > Allow new users to sign up**.
+2. Under **Authentication > Users > Add user**, create each teammate with an email and password, and tick **Auto Confirm**.
+3. Add each email to the allow list in the SQL editor:
+   `insert into private.dashboard_users (email) values ('name@example.com');`
+
+The page uses the project's publishable key. That key is meant to be public, and on its own it can't read or write anything.
 
 ## Future work
 

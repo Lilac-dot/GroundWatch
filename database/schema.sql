@@ -1,5 +1,6 @@
 -- GroundWatch database (Supabase project "groundwatch", ap-south-1).
--- Applied as migrations create_events_and_access and add_gap_and_noise_features.
+-- Applied as migrations create_events_and_access, add_gap_and_noise_features
+-- and add_minutely_view.
 -- Kept here for reference.
 --
 -- Access model:
@@ -67,6 +68,23 @@ revoke insert, update, delete on public.events from anon, authenticated;
 revoke all on public.events from anon;
 
 alter publication supabase_realtime add table public.events;
+
+-- Per-minute summary for the dashboard (migration add_minutely_view).
+-- security_invoker: runs with the reader's rights, so the events RLS applies.
+create or replace view public.events_minutely with (security_invoker = true) as
+select device, date_trunc('minute', created_at) as minute,
+       max(peak_l) as peak_l, max(peak_c) as peak_c, max(peak_r) as peak_r,
+       sum(hits_l)::int as hits_l, sum(hits_c)::int as hits_c, sum(hits_r)::int as hits_r,
+       round(avg(ldr))::int as ldr, bool_or(night) as night, bool_or(pir) as pir,
+       count(*) filter (where event = 'PERSON')::int  as person,
+       count(*) filter (where event = 'DIGGING')::int as digging,
+       count(*) filter (where event = 'ANIMAL')::int  as animal,
+       count(*) filter (where event = 'NOISE')::int   as noise,
+       count(*)::int as windows
+from public.events group by device, date_trunc('minute', created_at);
+revoke all on public.events_minutely from anon;
+grant select on public.events_minutely to authenticated;
+create index if not exists events_device_time_idx on public.events (device, created_at desc);
 
 -- Give a teammate dashboard access (run in the Supabase SQL editor):
 --   insert into private.dashboard_users (email) values ('name@example.com');
