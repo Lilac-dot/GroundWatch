@@ -2,40 +2,38 @@
 
 Seismic intrusion detection and localization on an 8051 microcontroller.
 
-Three piezo discs buried along a boundary pick up ground vibration. A PIR sensor, a magnetometer and a microphone are used to confirm what caused it. Every two seconds the controller reports what crossed (a person, vehicle, digging or an animal) and which of three zones it was in, with a local alarm and a serial log for the PC.
+Three piezo discs buried along a boundary pick up ground vibration. A PIR sensor confirms that a warm body caused it, and an LDR switches day and night sensitivity. Every two seconds the controller reports what crossed (a person, digging or an animal) and which of three zones it was in, with a local alarm and a serial log for the PC.
 
 Built for the Microprocessors and Microcontrollers (MPMC) course project by Tishya Yadlapalli, Dhanvitha Sankuratri and Naseeb.
 
-**Status (Nov 2026):** firmware complete and the rule table passes its host-side tests (`tests/`). All components are in hand and the hardware is being wired up; on-board testing and threshold tuning from real recordings come next.
+**Status (Nov 2026):** the magnetometer and microphone have been dropped from the build, and the PIR now connects directly (active high, no inverter). Firmware is updated to match and the rule table passes its host-side tests (`tests/`). LDR, PIR and LCD are being wired first; the ADC0809 and the piezo amplifiers follow, then on-board testing and threshold tuning from real recordings.
 
 ## Why
 
-A camera needs light and line of sight. A single PIR sensor gives false alarms and says nothing about what moved or where. Ground vibration works in the dark and through vegetation, and the timing across several sensors shows where the source is. GroundWatch combines the vibration data with three cheap sensors to separate real intrusions from wind, rain and wildlife.
+A camera needs light and line of sight. A single PIR sensor gives false alarms and says nothing about what moved or where. Ground vibration works in the dark and through vegetation, and the timing across several sensors shows where the source is. GroundWatch combines the vibration data with a PIR sensor to separate real intrusions from wind, rain and wildlife.
 
 ## How it works
 
 ```
  piezo L ─┐                                   ┌─ 16x2 LCD    event + zone
  piezo C ─┼─ LM358 ─┐                         ├─ buzzer, LED alarm
- piezo R ─┘         ├─ ADC0808 ── P1 ─┐       │
- microphone ────────┤                 │       │
+ piezo R ─┘         ├─ ADC0809 ── P1 ─┐       │
  LDR ───────────────┘                 ├─ 8051 ┤
- PIR (HC-SR501) ─────────── INT0 ─────┤       │
- QMC5883L magnetometer ──── I2C ──────┘       └─ UART ── PC: log + live plot
+ PIR (HC-SR501) ─────────── P3.2 ─────┘       └─ UART ── PC: log + live plot
 ```
 
-**Sampling.** Timer0 interrupts every 1 ms. The interrupt reads the three piezos and the microphone. For each piezo it updates a few running values for the current window: peak amplitude, number of distinct hits, time above threshold, time of the first hit, and the shortest and longest gap between hits. Raw samples are never stored, so the whole sensing state fits in a few dozen bytes of RAM.
+**Sampling.** Timer0 interrupts every 1 ms. The interrupt reads the three piezos. For each piezo it updates a few running values for the current window: peak amplitude, number of distinct hits, time above threshold, time of the first hit, and the shortest and longest gap between hits. Raw samples are never stored, so the whole sensing state fits in a few dozen bytes of RAM.
 
 **Scheduling.** The main loop runs a countdown scheduler for the slower tasks:
 
 | Period | Task |
 |---|---|
-| 1 ms (ISR) | Sample piezos and mic, update per-channel features |
-| 10 ms | Count sound bursts, switch day/night from the LDR |
-| 100 ms | Read the magnetometer, compare with its baseline |
+| 1 ms (ISR) | Sample piezos, update per-channel features |
+| 10 ms | Latch the PIR output, switch day/night from the LDR |
 | 200 ms | Buzzer, LED, LCD |
 | 2 s | Classify the window, raise the alarm, log to UART |
-| on interrupt | PIR motion flag (INT0) |
+
+The PIR is polled rather than wired to INT0: the HC-SR501 output is active high, INT0 only triggers on a falling edge, and the module holds its output high for seconds, so a 10 ms poll can't miss it.
 
 **Localization.** The zone is the piezo that registered the first hit in the window. A tie goes to the stronger peak.
 
@@ -44,9 +42,8 @@ A camera needs light and line of sight. A single PIR sensor gives false alarms a
 | Condition | Event | Action |
 |---|---|---|
 | No piezo hit | none | log |
-| Magnetic field change above `MAG_THR` | vehicle | alarm |
 | No PIR detection | noise (wind, rain) | log |
-| Strong peaks and repeated sound bursts | digging | alarm |
+| Strong peaks (`STRONG_PEAK`), at least `DIG_HITS` hits | digging | alarm |
 | Medium peaks at a steady rhythm | person | alarm |
 | Anything else with PIR detection | animal | log |
 
@@ -55,14 +52,13 @@ A camera needs light and line of sight. A single PIR sensor gives false alarms a
 ## Repository layout
 
 ```
+connections.md   every wire for the current design
 src/
   config.h       pin map, thresholds, event codes (the only file you should need to edit)
   main.c         scheduler and tasks
   sense.c        1 ms tick and per-channel feature extraction (ISR)
   fusion.c       zone selection and rule table (plain C, unit-tested on the host)
-  adc0808.c      ADC0808 driver
-  i2c.c          bit-banged I2C master
-  qmc5883l.c     magnetometer driver
+  adc0808.c      ADC0808 / ADC0809 driver
   lcd.c          HD44780 16x2 LCD, 4-bit mode
   uart.c         9600 baud serial output
 tests/
@@ -71,7 +67,7 @@ tools/
   groundwatch_pc.py  serial logger, CSV export and live plot
 docs/
   slides.pdf     project presentation
-  hardware_connections.md   full wiring checklist (.docx alongside)
+  hardware_connections.md   older wiring checklist (.docx alongside)
 ```
 
 ## Hardware
@@ -82,18 +78,15 @@ docs/
 | 3x piezo disc, 2x LM358 | vibration sensing and amplification |
 | ADC0808 / ADC0809 | 8-channel 8-bit ADC |
 | HC-SR501 | PIR body detection |
-| QMC5883L (GY-271) | vehicle detection via magnetic field |
-| Analog microphone module | digging and tool noise |
 | LDR + 10k | day/night |
-| 16x2 LCD, buzzer, LED | local alert |
+| 16x2 LCD + contrast pot, buzzer + BC547/BC548, LED | local alert |
 | USB-UART adapter | PC logging |
 
-The firmware needs about 5 KB of flash and uses the upper 128 bytes of internal RAM, so it targets an 8052-compatible part. A plain 8051 with 4 KB of flash and 128 bytes of RAM would need a trimmed build.
+The firmware needs about 4 KB of flash and uses the upper 128 bytes of internal RAM, so it targets an 8052-compatible part. A plain 8051 with 4 KB of flash and 128 bytes of RAM would need a trimmed build.
 
 ### Pin map
 
-Full wiring checklist, including power, decoupling and the clock divider: [`docs/hardware_connections.md`](docs/hardware_connections.md) (also as [.docx](docs/hardware_connections.docx)).
-
+**Wiring:** [`connections.md`](connections.md) has every connection for the current design, with physical pin numbers and the bring-up order. The older checklist in [`docs/hardware_connections.md`](docs/hardware_connections.md) also covers power, decoupling and the clock divider.
 
 | Signal | Pin | Notes |
 |---|---|---|
@@ -104,13 +97,12 @@ Full wiring checklist, including power, decoupling and the clock divider: [`docs
 | ADC0808 EOC | P0.5 | |
 | ADC0808 CLOCK | 8051 ALE / 2 | 74HC74 / 74LS74 divider gives 921.6 kHz |
 | Piezo L, C, R | ADC IN0-IN2 | through LM358 stages |
-| Microphone | ADC IN3 | |
+| (unused) | ADC IN3, IN5-IN7 | |
 | LDR divider | ADC IN4 | LDR to 5 V, 10k to GND |
-| PIR output | P3.2 (INT0) | via NPN inverter so motion pulls the pin low |
-| QMC5883L SCL, SDA | P3.4, P3.5 | 4.7k pull-ups; level-shift if the module has none |
+| PIR output | P3.2 | direct, active high (HC-SR501 gives 3.3 V; 8051 VIH is about 1.9 V) |
 | LCD RS, EN | P2.0, P2.1 | RW tied to GND |
 | LCD D4-D7 | P2.4-P2.7 | |
-| Buzzer | P2.2 | through a BC547, high = on |
+| Buzzer | P2.2 | through a BC547 / BC548 low-side switch, high = on |
 | Alarm LED | P2.3 | active low |
 | UART TX | P3.1 | to the USB-UART RX |
 
@@ -139,12 +131,12 @@ python3 tools/groundwatch_pc.py /dev/cu.usbserial-0001 --label footstep  # log +
 python3 tools/groundwatch_pc.py --demo                                   # try it without hardware
 ```
 
-Each 2-second window becomes one labeled row in `windows.csv`. Comparing peaks, hit counts, magnetometer deviation and sound bursts across labels gives the threshold values.
+Each 2-second window becomes one labeled row in `windows.csv`. Comparing peaks, hit counts and gaps across labels gives the threshold values.
 
 The board prints one line per window at 9600 8N1:
 
 ```
-EV,<event>,<zone>,peakL,peakC,peakR,hitsL,hitsC,hitsR,activeL,activeC,activeR,firstL,firstC,firstR,mag_dev,sound_bursts,pir,night,ldr
+EV,<event>,<zone>,peakL,peakC,peakR,hitsL,hitsC,hitsR,activeL,activeC,activeR,firstL,firstC,firstR,pir,night,ldr
 ```
 
 ## Future work
