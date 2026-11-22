@@ -65,7 +65,15 @@
 #define STEP_CARRY_MS   1500    /* a step this soon after the previous window's last
                                    step still gives a gap (slow walking ~1.2 s) */
 #define PIR_WARMUP_MS   60000u  /* HC-SR501 output is unreliable for ~1 min after power-on */
-#define ALARM_MS        3000
+#define ALARM_MS        3000    /* LED + LCD show each PERSON/DIGGING window this long */
+
+/* Buzzer policy (fusion.c, alarm_update). Counted in 2 s windows, not ms, so the
+ * 16-bit ms counter's 65 s wrap can't upset the 40 s cycle. */
+#define ALARM_CONFIRM   2       /* sound only when this many of the last 3 windows
+                                   are PERSON/DIGGING: a one-off is only shown */
+#define ALARM_SOUND_WIN 5       /* then beep for 5 windows (10 s) */
+#define ALARM_QUIET_WIN 15      /* then stay silent 15 windows (30 s) even if
+                                   detections go on; they are still shown and logged */
 
 /* ---------------- Event trigger (STA/LTA, see sense.c) ----------------
  * STA = ~16 ms envelope of |deviation from baseline|, LTA = ~2 s background.

@@ -26,6 +26,16 @@ static void hits(window_t *w, int i, int n, int peak, int gap, int t0)
 }
 static void gaps(window_t *w, int i, int min_ms, int max_ms) { w->gap_min[i] = min_ms / 8; w->gap_max[i] = max_ms / 8; }
 
+static void check(const char *rule, const char *name, int ok);
+
+/* buzzer state per window for an event sequence: '#' sounding, '_' silent */
+static void seq(const int *ev, int n, char *out)
+{
+    alarm_reset();
+    for (int i = 0; i < n; i++) out[i] = alarm_update((uint8_t)ev[i]) ? '#' : '_';
+    out[n] = 0;
+}
+
 static void check(const char *rule, const char *name, int ok)
 {
     total++;
@@ -122,6 +132,30 @@ int main(void)
     check("night", "night, LDR == LDR_LIGHT -> stays night", fusion_night(1, LDR_LIGHT) == 1);
     check("night", "night, LDR == LDR_LIGHT + 1 -> day", fusion_night(1, LDR_LIGHT + 1) == 0);
     check("night", "day, LDR == LDR_LIGHT + 1 -> stays day", fusion_night(0, LDR_LIGHT + 1) == 0);
+
+    /* ---------------- buzzer policy: confirm, hold, rest ---------------- */
+    {
+        /* feed a sequence of window events, return the buzzer state per window */
+        const int P = EV_PERSON, D = EV_DIGGING, A = EV_ANIMAL, N = EV_NOISE, _ = EV_NONE;
+        char out[64], buf[160];
+        (void)buf;
+
+        #define EXPECT(name, want, ...) do { int ev[] = { __VA_ARGS__ }; seq(ev, sizeof ev / sizeof ev[0], out); \
+            snprintf(buf, sizeof buf, "%s  [%s]%s", name, out, strcmp(out, want) ? "  want [" want "]" : ""); \
+            check("buzzer", buf, !strcmp(out, want)); } while (0)
+
+        EXPECT("one detection alone: shown, no buzzer",            "_____",     P, _, _, _, _);
+        EXPECT("two in a row: buzzer from the second",             "_####",     P, P, _, _, _);
+        EXPECT("2 of the last 3 also confirms",                    "__###",     P, _, D, _, _);
+        EXPECT("detections 3 windows apart don't confirm",         "_____",     P, _, _, P, _);
+        EXPECT("animal and noise never count",                     "_____",     A, A, N, N, A);
+        EXPECT("sounds 5 windows, then 15 silent, then again",
+               "_#####_______________#####_______________",
+               P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P,P);
+        EXPECT("after the rest, a fresh intruder needs confirming again",
+               "_#####________________#####",
+               P,P,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,P,P,_,_,_,_);
+    }
 
     printf(fails ? "\n%d of %d rule checks failed\n" : "\nall %d rule checks passed\n", fails ? fails : total, total);
     return fails != 0;

@@ -72,3 +72,31 @@ uint8_t fusion_classify(const window_t *w, uint8_t z)
     return EV_ANIMAL;
 #endif
 }
+
+/* ---------------- buzzer policy ----------------
+ * hist holds the last 3 windows, 1 = PERSON or DIGGING. The buzzer starts when
+ * ALARM_CONFIRM of them are set and it isn't sounding or cooling down, sounds
+ * for ALARM_SOUND_WIN windows (counting the one that confirmed it), then rests
+ * for ALARM_QUIET_WIN windows. */
+#ifndef __SDCC
+#define __idata
+#endif
+static __idata uint8_t al_hist, al_sound, al_quiet;
+
+void alarm_reset(void) { al_hist = 0; al_sound = 0; al_quiet = 0; }
+
+uint8_t alarm_update(uint8_t ev)
+{
+    uint8_t n;
+
+    al_hist = (uint8_t)((al_hist << 1) | (ev >= EV_PERSON)) & 7;
+    n = (al_hist & 1) + ((al_hist >> 1) & 1) + ((al_hist >> 2) & 1);
+
+    if (al_sound) {                       /* the window after the last beeping one starts the rest */
+        if (--al_sound == 0) al_quiet = ALARM_QUIET_WIN;
+    } else if (al_quiet) {
+        al_quiet--;
+    }
+    if (!al_sound && !al_quiet && n >= ALARM_CONFIRM) al_sound = ALARM_SOUND_WIN;
+    return al_sound != 0;
+}

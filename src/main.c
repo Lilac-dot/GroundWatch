@@ -28,7 +28,8 @@ static __bit pir_ready;                  /* PIR warm-up over (PIR_WARMUP_MS afte
 static __idata uint16_t boot_ms;
 static __bit pir_now;                    /* PIR level at the last poll, for the LCD */
 static __bit night;
-static __bit alarm_on;
+static __bit alarm_on;                   /* a PERSON/DIGGING window is on show (LED + LCD) */
+static __bit sounding;                   /* buzzer on: confirmed, see alarm_update() */
 static __bit display_dirty;
 
 /* main-loop state lives in indirect RAM: the direct RAM below 0x80 is kept
@@ -141,14 +142,27 @@ static void task_classify(void)
         last_hits = win.hits[z];
         display_dirty = 1;
     }
-    if (ev >= EV_PERSON) {
+    if (ev >= EV_PERSON) {               /* every detection is shown at once ... */
         alarm_on    = 1;
         alarm_until = millis() + ALARM_MS;
     }
     if (!sense_raw_mode()) log_window(ev, z);   /* raw mode: the UART carries samples */
+
+    /* ... but the buzzer needs confirmation, then holds and rests (fusion.c) */
+    if (alarm_update(ev)) {
+        if (!sounding && !sense_raw_mode()) {
+            uart_puts("GW,alarm,");      /* the PC logger shows GW lines as board messages */
+            uart_putc(z == ZONE_NONE ? '-' : zone_char[z]);
+            uart_puts("\r\n");
+        }
+        sounding = 1;
+    } else {
+        sounding = 0;
+    }
 }
 
-/* 200 ms: buzzer beeps, LED on, LCD redrawn only when something changed */
+/* 200 ms: LED on while a detection is shown or the buzzer sounds; the buzzer
+ * beeps only while sounding (confirmed); LCD redrawn only when something changed */
 static void task_display(void)
 {
     static uint8_t beat;
@@ -157,13 +171,8 @@ static void task_display(void)
         alarm_on = 0;
         display_dirty = 1;
     }
-    if (alarm_on) {
-        ALARM_LED = LED_ON;
-        BUZZER = (++beat & 1);
-    } else {
-        ALARM_LED = LED_OFF;
-        BUZZER = 0;
-    }
+    ALARM_LED = (alarm_on || sounding) ? LED_ON : LED_OFF;
+    BUZZER    = sounding ? (++beat & 1) : 0;
 
     if (!display_dirty) return;
     display_dirty = 0;
@@ -225,6 +234,7 @@ void main(void)
     delay_ms(1500);                      /* let the piezo baselines settle */
     if (!sense_raw_mode()) uart_puts("GW,ready\r\n");
 
+    alarm_reset();
     sense_take_window(&win);             /* throw away the settling window */
     pir_seen = 0;
     display_dirty = 1;

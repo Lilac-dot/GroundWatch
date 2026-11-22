@@ -25,4 +25,9 @@ uint8_t fusion_classify(const window_t *w, uint8_t z);  /* EV_* */
 uint8_t fusion_regular(const window_t *w, uint8_t z);   /* steady step rhythm on zone z */
 uint8_t fusion_night(uint8_t night, uint8_t ldr);       /* day/night with hysteresis */
 
+/* Buzzer policy: call once per window with that window's event. Returns 1 while
+ * the buzzer should sound (confirmation, hold and cooldown: see config.h). */
+void    alarm_reset(void);
+uint8_t alarm_update(uint8_t ev);
+
 #endif
