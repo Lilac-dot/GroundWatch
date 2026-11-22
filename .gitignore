@@ -3,3 +3,6 @@ build/
 __pycache__/
 .env
 datasets/
+
+# personal-use display fonts (Macelon demo, Bollity): not redistributable
+dashboard/fonts/

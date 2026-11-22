@@ -9,7 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="preload" href="fonts/Macelon-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/Bollity.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="styles.css?v=6">
 </head>
 <body>
   <!-- ======================= sign in ======================= -->
@@ -82,29 +84,29 @@
       </section>
 
       <section class="stats" aria-label="Summary">
-        <article class="card stat status" id="status-card" aria-live="polite">
+        <article class="stat pebble p-moss status" id="status-card" aria-live="polite">
           <div class="stat-top"><span class="kicker" id="status-eyebrow">Status</span><span class="stat-icon" id="status-icon"></span></div>
           <p class="stat-value status-title" id="status-title">All quiet</p>
           <p class="stat-foot" id="status-sub">Listening on all three zones</p>
         </article>
-        <article class="card stat">
+        <article class="stat pebble p-earth">
           <div class="stat-top"><span class="kicker">Alarms</span><span class="stat-icon ic-alarm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></svg></span></div>
           <p class="stat-value" id="t-alarms">0</p>
           <div class="stat-foot"><span id="t-alarms-foot">last hour</span><span class="mini-bars" id="alarm-bars" aria-hidden="true"></span></div>
         </article>
-        <article class="card stat">
+        <article class="stat pebble p-sand">
           <div class="stat-top"><span class="kicker">Detections</span><span class="stat-icon ic-river"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg></span></div>
           <p class="stat-value" id="t-events">0</p>
           <p class="stat-foot" id="t-events-foot">person, digging, animal</p>
         </article>
-        <article class="card stat">
+        <article class="stat pebble p-sage">
           <div class="stat-top"><span class="kicker">Light</span><span class="stat-icon ic-sun" id="light-icon"></span></div>
           <p class="stat-value" id="t-light">–</p>
           <p class="stat-foot" id="t-light-foot">LDR reading</p>
         </article>
       </section>
 
-      <section class="card map-card" id="boundary">
+      <section class="band" id="boundary">
         <div class="card-head">
           <div>
             <p class="kicker">Field layout · peak in last 5 min</p>
@@ -116,7 +118,7 @@
       </section>
 
       <section class="duo">
-        <article class="card" id="activity">
+        <article class="open" id="activity">
           <div class="card-head">
             <div>
               <p class="kicker" id="activity-kicker">Strongest vibration per minute</p>
@@ -128,7 +130,7 @@
           <div class="table-wrap" id="table-activity" hidden></div>
         </article>
 
-        <article class="card feed-card" id="events">
+        <article class="open feed-card" id="events">
           <div class="card-head">
             <div>
               <p class="kicker" id="feed-count">In range</p>
@@ -145,6 +147,6 @@
   </div>
 
   <div class="tooltip" id="tooltip" role="status" hidden></div>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=5"></script>
 </body>
 </html>

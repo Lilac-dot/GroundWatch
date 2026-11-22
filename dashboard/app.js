@@ -1,6 +1,6 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 import { SUPABASE_URL, SUPABASE_KEY, DEVICES, ONLINE_SECONDS, LDR_DARK } from "./config.js";
-import { lineChart, table } from "./charts.js";
+import { lineChart, table } from "./charts.js?v=4";
 
 const $ = (id) => document.getElementById(id);
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -115,7 +115,7 @@ function initShell() {
   for (const a of links) { const s = document.querySelector(a.getAttribute("href")); if (s) io.observe(s); }
 
   // staggered entrance; class removed afterwards so hover transforms still work
-  document.querySelectorAll(".heading, .stats .card, .map-card, .duo .card").forEach((n, i) => {
+  document.querySelectorAll(".heading, .stats .stat, .band, .duo .open").forEach((n, i) => {
     n.style.setProperty("--i", i);
     n.classList.add("rise");
     n.addEventListener("animationend", (e) => { if (e.animationName === "rise") n.classList.remove("rise"); }, { once: false });
