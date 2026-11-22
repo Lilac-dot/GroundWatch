@@ -65,6 +65,8 @@ tests/
   test_fusion.c  host-side tests for the rule table
 tools/
   groundwatch_pc.py  serial logger, CSV export and live plot
+database/
+  schema.sql     Supabase table and access rules
 docs/
   slides.pdf     project presentation
   hardware_connections.md   older wiring checklist (.docx alongside)
@@ -138,6 +140,18 @@ The board prints one line per window at 9600 8N1:
 ```
 EV,<event>,<zone>,peakL,peakC,peakR,hitsL,hitsC,hitsR,activeL,activeC,activeR,firstL,firstC,firstR,pir,night,ldr
 ```
+
+## Cloud database
+
+Windows can also go to a Supabase (Postgres) database, so the whole team sees the same data on the dashboard. The schema and access rules are in [`database/schema.sql`](database/schema.sql).
+
+```sh
+cp .env.example .env      # then paste the secret key from Supabase > Project Settings > API Keys
+python3 tools/groundwatch_pc.py /dev/cu.usbserial-0001 --cloud --label footstep
+python3 tools/groundwatch_pc.py --demo --cloud            # fake rows, stored with device = demo
+```
+
+The laptop is the bridge: it reads the board's serial line and uploads each window in the background, holding rows in memory if the network drops. `.env` is git-ignored; the secret key can write to the database, so never commit it. The dashboard only reads, and only for signed-in team members.
 
 ## Future work
 

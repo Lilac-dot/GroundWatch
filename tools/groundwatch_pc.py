@@ -6,12 +6,21 @@ GroundWatch PC side: live log + plot of the 8051's 2-second windows.
     python3 tools/groundwatch_pc.py /dev/cu.usbserial-0001    # log to windows.csv + plot
     python3 tools/groundwatch_pc.py PORT --label footstep     # tag rows while recording
     python3 tools/groundwatch_pc.py --demo                    # fake data, no hardware
+    python3 tools/groundwatch_pc.py PORT --cloud              # also upload to Supabase
 
 Every row in the CSV is one window. Plot the peaks per class to pick the
-thresholds in src/config.h (PIEZO_THR_*, MED_PEAK, STRONG_PEAK, SOUND_THR, MAG_THR).
+thresholds in src/config.h (PIEZO_THR_*, MED_PEAK, STRONG_PEAK, DIG_HITS).
+
+--cloud reads SUPABASE_URL and SUPABASE_SECRET_KEY from the environment or from
+a .env file at the repo root (copy .env.example). Never commit .env: the secret
+key can write to the database.
 """
 import argparse
 import csv
+import json
+import queue
+import urllib.error
+import urllib.request
 import os
 import random
 import sys
@@ -63,7 +72,94 @@ def demo_lines():
                        + [str(int(ev in ("ANIMAL", "PERSON", "DIGGING"))), "0", "140"])
 
 
-def reader(lines, rows, out_path, label, quiet):
+def load_env(path):
+    """Minimal .env reader: KEY=value lines, # comments. Real env vars win."""
+    env = {}
+    if os.path.exists(path):
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    env[k.strip()] = v.strip().strip('"').strip("'")
+    env.update({k: v for k, v in os.environ.items() if k.startswith("SUPABASE_")})
+    return env
+
+
+def to_record(row, label, device):
+    """CSV-style row dict -> events table record"""
+    def num(v):
+        return None if v in ("", "-") else int(v)
+    rec = {"device": device, "event": row["event"],
+           "zone": None if row["zone"] == "-" else row["zone"],
+           "pir": row["pir"] == "1", "night": row["night"] == "1",
+           "ldr": num(row["ldr"]), "label": label or None}
+    for z in "LCR":
+        rec[f"peak_{z.lower()}"] = num(row[f"peak_{z}"])
+        rec[f"hits_{z.lower()}"] = num(row[f"hits_{z}"])
+        rec[f"active_ms_{z.lower()}"] = num(row[f"active_ms_{z}"])
+        rec[f"first_ms_{z.lower()}"] = num(row[f"first_ms_{z}"])
+    return rec
+
+
+class Cloud:
+    """Uploads records to Supabase in the background, in small batches.
+    If the network drops, rows wait in memory (up to MAX_PENDING) and go up later."""
+    MAX_PENDING = 2000
+
+    def __init__(self, url, key):
+        self.endpoint = url.rstrip("/") + "/rest/v1/events"
+        self.headers = {"apikey": key, "Content-Type": "application/json",
+                        "Prefer": "return=minimal"}
+        if key.startswith("eyJ"):                  # legacy service_role JWT
+            self.headers["Authorization"] = "Bearer " + key
+        self.q = queue.Queue(self.MAX_PENDING)
+        self.sent = 0
+        self.failing = False
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def put(self, rec):
+        try:
+            self.q.put_nowait(rec)
+        except queue.Full:
+            pass                                   # offline too long: newest rows are dropped
+
+    def _post(self, batch):
+        req = urllib.request.Request(self.endpoint, data=json.dumps(batch).encode(),
+                                     headers=self.headers, method="POST")
+        urllib.request.urlopen(req, timeout=10).close()
+
+    def _run(self):
+        batch = []
+        while True:
+            try:
+                batch.append(self.q.get(timeout=1))
+                while len(batch) < 50:
+                    batch.append(self.q.get_nowait())
+            except queue.Empty:
+                pass
+            if not batch:
+                continue
+            try:
+                self._post(batch)
+                self.sent += len(batch)
+                if self.failing:
+                    print(f"cloud: back online, {self.sent} rows uploaded")
+                self.failing = False
+                batch = []
+            except urllib.error.HTTPError as e:
+                print(f"cloud: upload rejected ({e.code}): {e.read().decode(errors='ignore')[:200]}")
+                if 400 <= e.code < 500:
+                    batch = []                     # bad key or bad row: retrying won't help
+                time.sleep(5)
+            except OSError as e:
+                if not self.failing:
+                    print(f"cloud: offline ({e}), will retry")
+                self.failing = True
+                time.sleep(5)
+
+
+def reader(lines, rows, out_path, label, quiet, cloud=None, device="gw-01"):
     new_file = not os.path.exists(out_path)
     with open(out_path, "a", newline="") as f:
         w = csv.writer(f)
@@ -82,6 +178,8 @@ def reader(lines, rows, out_path, label, quiet):
             w.writerow([now, label] + [row[k] for k in FIELDS])
             f.flush()
             rows.append(row)
+            if cloud:
+                cloud.put(to_record(row, label, device))
             if not quiet or row["event"] != "NONE":
                 flag = "  <-- ALARM" if row["event"] in ALARM else ""
                 print(f"{now}  {row['event']:8} zone {row['zone']}  "
@@ -135,6 +233,8 @@ def main():
     ap.add_argument("--quiet", action="store_true", help="don't print NONE windows")
     ap.add_argument("--list", action="store_true", help="list serial ports and exit")
     ap.add_argument("--demo", action="store_true", help="fake data, no board needed")
+    ap.add_argument("--cloud", action="store_true", help="also upload every window to Supabase")
+    ap.add_argument("--device", default=None, help="device name in the database (default gw-01, or demo)")
     args = ap.parse_args()
 
     if args.list:
@@ -145,18 +245,27 @@ def main():
     if not args.port and not args.demo:
         ap.error("give a serial port (try --list) or --demo")
 
+    cloud = None
+    device = args.device or ("demo" if args.demo else "gw-01")
+    if args.cloud:
+        env = load_env(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
+        if not env.get("SUPABASE_URL") or not env.get("SUPABASE_SECRET_KEY"):
+            ap.error("--cloud needs SUPABASE_URL and SUPABASE_SECRET_KEY (copy .env.example to .env)")
+        cloud = Cloud(env["SUPABASE_URL"], env["SUPABASE_SECRET_KEY"])
+        print(f"Uploading to {env['SUPABASE_URL']} as device '{device}'")
+
     lines = demo_lines() if args.demo else serial_lines(args.port, args.baud)
     rows = deque(maxlen=HISTORY)
     print(f"Logging to {args.out}  (Ctrl+C to stop)")
 
     if args.no_plot:
         try:
-            reader(lines, rows, args.out, args.label, args.quiet)
+            reader(lines, rows, args.out, args.label, args.quiet, cloud, device)
         except KeyboardInterrupt:
             pass
         return 0
 
-    threading.Thread(target=reader, args=(lines, rows, args.out, args.label, args.quiet),
+    threading.Thread(target=reader, args=(lines, rows, args.out, args.label, args.quiet, cloud, device),
                      daemon=True).start()
     try:
         plot(rows)
