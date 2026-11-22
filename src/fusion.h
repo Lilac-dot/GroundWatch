@@ -14,6 +14,7 @@ typedef struct {
     uint8_t  first[N_PIEZO];     /* first hit, 8 ms units, T8_NONE = never */
     uint8_t  gap_min[N_PIEZO];   /* shortest / longest gap between hits, 8 ms units */
     uint8_t  gap_max[N_PIEZO];
+    uint8_t  noise[N_PIEZO];     /* background noise, mean |deviation| in ADC counts */
     uint8_t  pir;
     uint8_t  night;
 } window_t;

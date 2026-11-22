@@ -46,6 +46,7 @@ The junction voltage rises with light. Firmware: below `LDR_DARK` = night (more 
 | OUT | **8051 P3.2, direct** | active high: about 3.3 V on motion, 0 V idle. The AT89S52 reads anything above about 1.9 V as high, so no level shifter or inverter is needed. |
 
 - **No BC547/BC548 inverter on the PIR.** The firmware treats P3.2 high as motion and checks the pin every 10 ms.
+- **Add a 10 kΩ resistor from P3.2 to GND.** The 8051 has a weak internal pull-up, so if the PIR wire comes loose, an unconnected P3.2 reads high and the board sees motion all the time. With the resistor, a loose wire reads as "no motion". The PIR still drives the pin high easily.
 - Set the module's jumper to **H (repeat trigger)** and turn the **time-delay pot fully counter-clockwise** (shortest hold).
 - After power-on, the HC-SR501 needs **about 60 s to settle** before its readings are reliable.
 
@@ -177,7 +178,7 @@ Settings are 9600 baud, 8N1, and one line every 2 s. Run `python3 tools/groundwa
 | P2.3 | LED (low = on) | out |
 | P2.4–P2.7 | LCD D4–D7 | out |
 | P3.1 | UART TXD | out |
-| P3.2 | PIR OUT (high = motion) | in |
+| P3.2 | PIR OUT (high = motion), 10 kΩ to GND | in |
 | ALE | 74LS74 CLK1 | clock out |
 
 Free pins: P3.0, P3.3–P3.7, P0.6, P0.7.

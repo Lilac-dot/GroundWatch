@@ -22,13 +22,13 @@ A camera needs light and line of sight. A single PIR sensor gives false alarms a
  PIR (HC-SR501) ─────────── P3.2 ─────┘       └─ UART ── PC: log + live plot
 ```
 
-**Sampling.** Timer0 interrupts every 1 ms. The interrupt reads the three piezos. For each piezo it updates a few running values for the current window: peak amplitude, number of distinct hits, time above threshold, time of the first hit, and the shortest and longest gap between hits. Raw samples are never stored, so the whole sensing state fits in a few dozen bytes of RAM.
+**Sampling.** Timer0 interrupts every 1 ms. The interrupt reads the three piezos. For each piezo it updates a few running values for the current window: peak amplitude, number of distinct hits, time above threshold, time of the first hit, the shortest and longest gap between hits, and the background noise level. The hit threshold adapts: it is four times the current noise level or the day/night minimum, whichever is larger, so wind or nearby traffic raises it automatically. Raw samples are never stored, so the whole sensing state fits in a few dozen bytes of RAM.
 
 **Scheduling.** The main loop runs a countdown scheduler for the slower tasks:
 
 | Period | Task |
 |---|---|
-| 1 ms (ISR) | Sample piezos, update per-channel features |
+| 1 ms (ISR) | Sample piezos, update per-channel features and noise levels (about 0.88 ms of each 1 ms in the simulator) |
 | 10 ms | Latch the PIR output, switch day/night from the LDR |
 | 200 ms | Buzzer, LED, LCD |
 | 2 s | Classify the window, raise the alarm, log to UART |
@@ -133,12 +133,13 @@ python3 tools/groundwatch_pc.py /dev/cu.usbserial-0001 --label footstep  # log +
 python3 tools/groundwatch_pc.py --demo                                   # try it without hardware
 ```
 
-Each 2-second window becomes one labeled row in `windows.csv`. Comparing peaks, hit counts and gaps across labels gives the threshold values.
+Each 2-second window becomes one labeled row in `windows.csv`. Comparing peaks, hit counts and gaps across labels gives the threshold values. Times are in ms; gaps are `-` with fewer than two hits; noise is each piezo's background level in ADC counts.
 
 The board prints one line per window at 9600 8N1:
 
 ```
-EV,<event>,<zone>,peakL,peakC,peakR,hitsL,hitsC,hitsR,activeL,activeC,activeR,firstL,firstC,firstR,pir,night,ldr
+EV,<event>,<zone>,peakL,peakC,peakR,hitsL,hitsC,hitsR,activeL,activeC,activeR,firstL,firstC,firstR,
+   gapminL,gapminC,gapminR,gapmaxL,gapmaxC,gapmaxR,noiseL,noiseC,noiseR,pir,night,ldr
 ```
 
 ## Cloud database

@@ -61,8 +61,13 @@
 #define ALARM_MS        3000
 
 /* ---------------- Piezo thresholds (ADC counts above baseline, 8-bit) ---------------- */
-#define PIEZO_THR_DAY   25      /* a "hit" starts above this */
+#define PIEZO_THR_DAY   25      /* minimum hit threshold by day */
 #define PIEZO_THR_NIGHT 15      /* night mode: more sensitive */
+/* Adaptive threshold: each piezo tracks its background noise (mean absolute
+ * deviation from baseline, ~256 ms average) and a hit must exceed
+ * noise << NOISE_MULT_SHIFT (4x by default) or the day/night minimum above,
+ * whichever is larger. Wind and traffic raise the noise and the threshold with it. */
+#define NOISE_MULT_SHIFT 2
 #define MED_PEAK        40      /* person-sized peaks */
 #define STRONG_PEAK     100     /* shovel / heavy impact */
 

@@ -32,6 +32,8 @@ from datetime import datetime
 FIELDS = (["event", "zone"]
           + [f"peak_{z}" for z in "LCR"] + [f"hits_{z}" for z in "LCR"]
           + [f"active_ms_{z}" for z in "LCR"] + [f"first_ms_{z}" for z in "LCR"]
+          + [f"gap_min_ms_{z}" for z in "LCR"] + [f"gap_max_ms_{z}" for z in "LCR"]
+          + [f"noise_{z}" for z in "LCR"]
           + ["pir", "night", "ldr"])
 ALARM = {"PERSON", "DIGGING"}
 HISTORY = 60          # windows on screen (2 min)
@@ -66,9 +68,15 @@ def demo_lines():
         peaks = [max(0, pk - abs(i - z) * 20 + random.randint(-8, 8)) if pk else 0 for i in range(3)]
         hits = [random.randint(3 if ev == "DIGGING" else 1, 5) if p > 20 else 0 for p in peaks]
         first = [str(200 + abs(i - z) * 40) if h else "-" for i, h in enumerate(hits)]
+        gap = 500 if ev == "PERSON" else 300
+        gmin = [str(gap - (random.randint(150, 250) if ev == "ANIMAL" else random.randint(0, 40)))
+                if h >= 2 else "-" for h in hits]
+        gmax = [str(gap + (random.randint(300, 600) if ev == "ANIMAL" else random.randint(0, 60)))
+                if h >= 2 else "-" for h in hits]
+        noise = [str(random.randint(1, 3) + (4 if ev == "NOISE" else 0)) for _ in range(3)]
         yield ",".join(["EV", ev, "LCR"[z] if pk else "-"]
                        + [str(p) for p in peaks] + [str(h) for h in hits]
-                       + [str(h * 60) for h in hits] + first
+                       + [str(h * 60) for h in hits] + first + gmin + gmax + noise
                        + [str(int(ev in ("ANIMAL", "PERSON", "DIGGING"))), "0", "140"])
 
 
@@ -99,6 +107,9 @@ def to_record(row, label, device):
         rec[f"hits_{z.lower()}"] = num(row[f"hits_{z}"])
         rec[f"active_ms_{z.lower()}"] = num(row[f"active_ms_{z}"])
         rec[f"first_ms_{z.lower()}"] = num(row[f"first_ms_{z}"])
+        rec[f"gap_min_ms_{z.lower()}"] = num(row[f"gap_min_ms_{z}"])
+        rec[f"gap_max_ms_{z.lower()}"] = num(row[f"gap_max_ms_{z}"])
+        rec[f"noise_{z.lower()}"] = num(row[f"noise_{z}"])
     return rec
 
 

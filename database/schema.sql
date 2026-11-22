@@ -1,5 +1,6 @@
 -- GroundWatch database (Supabase project "groundwatch", ap-south-1).
--- Applied as migration create_events_and_access. Kept here for reference.
+-- Applied as migrations create_events_and_access and add_gap_and_noise_features.
+-- Kept here for reference.
 --
 -- Access model:
 --   bridge (tools/groundwatch_pc.py --cloud) writes with the secret key from a local .env;
@@ -28,7 +29,16 @@ create table public.events (
     pir          boolean     not null default false,
     night        boolean     not null default false,
     ldr          smallint,
-    label        text        -- ground-truth tag from --label, for tuning and ML training
+    label        text,       -- ground-truth tag from --label, for tuning and ML training
+    gap_min_ms_l integer,    -- shortest / longest gap between hits (ms), null if < 2 hits
+    gap_min_ms_c integer,
+    gap_min_ms_r integer,
+    gap_max_ms_l integer,
+    gap_max_ms_c integer,
+    gap_max_ms_r integer,
+    noise_l      smallint,   -- background noise: mean |deviation| from baseline, ADC counts
+    noise_c      smallint,
+    noise_r      smallint
 );
 
 create index events_created_at_idx on public.events (created_at desc);

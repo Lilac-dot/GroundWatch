@@ -9,7 +9,7 @@ void     sense_init(void);
 uint16_t millis(void);                  /* wraps every ~65 s; use differences */
 void     delay_ms(uint16_t ms);
 
-void     sense_set_threshold(uint8_t thr);       /* piezo hit threshold (day / night) */
+void     sense_set_threshold(uint8_t thr);       /* minimum piezo hit threshold (day / night) */
 void     sense_take_window(window_t *w);         /* copy piezo features, start a new window */
 uint8_t  sense_ldr(void);                        /* latest LDR reading */
 

@@ -38,7 +38,8 @@ static __idata window_t win;
 
 /* ======================= helpers ======================= */
 
-/* "EV,PERSON,C,pk0,pk1,pk2,h0,h1,h2,act0,act1,act2,first0,first1,first2,pir,night,ldr" */
+/* "EV,PERSON,C, peak x3, hits x3, active ms x3, first ms x3,
+ *  gap min ms x3, gap max ms x3, noise x3, pir, night, ldr"   (x3 = L, C, R) */
 static void log_window(uint8_t ev, uint8_t z)
 {
     uint8_t i;
@@ -55,6 +56,17 @@ static void log_window(uint8_t ev, uint8_t z)
         if (win.first[i] == T8_NONE) uart_putc('-');
         else                         uart_putu(win.first[i] * 8u);
     }
+    for (i = 0; i < N_PIEZO; i++) {      /* gaps need 2+ hits, '-' otherwise */
+        uart_putc(',');
+        if (win.hits[i] < 2) uart_putc('-');
+        else                 uart_putu(win.gap_min[i] * 8u);
+    }
+    for (i = 0; i < N_PIEZO; i++) {
+        uart_putc(',');
+        if (win.hits[i] < 2) uart_putc('-');
+        else                 uart_putu(win.gap_max[i] * 8u);
+    }
+    for (i = 0; i < N_PIEZO; i++) { uart_putc(','); uart_putu(win.noise[i]); }
     uart_putc(','); uart_putu(win.pir);
     uart_putc(','); uart_putu(win.night);
     uart_putc(','); uart_putu(sense_ldr());
