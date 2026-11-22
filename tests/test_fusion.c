@@ -86,6 +86,13 @@ int main(void)
     w = quiet(); hits(&w, 1, 2, 60, 0, 0); gaps(&w, 1, 300, 1400); w.pir = 1;
     expect("person", "two steps, carried gap very different -> ANIMAL", &w, 1, EV_ANIMAL);
 
+    w = quiet(); hits(&w, 1, 3, MED_PEAK_NIGHT, S, 0); w.pir = 1; w.night = 1;
+    expect("person", "night: peak == MED_PEAK_NIGHT, steady -> PERSON", &w, 1, EV_PERSON);
+    w = quiet(); hits(&w, 1, 3, MED_PEAK_NIGHT - 1, S, 0); w.pir = 1; w.night = 1;
+    expect("person", "night: peak == MED_PEAK_NIGHT - 1 -> ANIMAL", &w, 1, EV_ANIMAL);
+    w = quiet(); hits(&w, 1, 3, MED_PEAK_NIGHT, S, 0); w.pir = 1;
+    expect("person", "same peak by day -> ANIMAL (day needs MED_PEAK)", &w, 1, EV_ANIMAL);
+
     /* ---------------- DIGGING: peak >= STRONG_PEAK, >= DIG_HITS hits, not steady ---------------- */
     w = quiet(); hits(&w, 1, DIG_HITS, STRONG_PEAK, 0, 0); gaps(&w, 1, 150, 700); w.pir = 1;
     expect("digging", "STRONG_PEAK, DIG_HITS hits, unsteady -> DIGGING", &w, 1, EV_DIGGING);

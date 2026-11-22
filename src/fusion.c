@@ -5,7 +5,7 @@
  *
  *   Event       Piezo                                    PIR
  *   Wind/rain   any                                      no    -> ignore
- *   Person      medium, regular rhythm                   yes   -> alarm
+ *   Person      medium (lower at night), regular rhythm  yes   -> alarm
  *   Digging     strong, DIG_HITS+ hits, not regular      yes   -> alarm
  *   Animal      weak or irregular                        yes   -> log only
  *
@@ -53,10 +53,11 @@ uint8_t fusion_night(uint8_t night, uint8_t ldr)
 
 uint8_t fusion_classify(const window_t *w, uint8_t z)
 {
-    uint8_t pk;
+    uint8_t pk, med;
 
     if (z == ZONE_NONE) return EV_NONE;
-    pk = w->peak[z];
+    pk  = w->peak[z];
+    med = w->night ? MED_PEAK_NIGHT : MED_PEAK;   /* night: smaller steps count */
 
     if (!w->pir) return EV_NOISE;
 #ifdef GW_TREE
@@ -66,7 +67,7 @@ uint8_t fusion_classify(const window_t *w, uint8_t z)
 #else
     /* person first: firm footsteps also have strong peaks and 3+ hits, and
      * checking digging first called a third of real walkers DIGGING */
-    if (pk >= MED_PEAK && fusion_regular(w, z))              return EV_PERSON;
+    if (pk >= med && fusion_regular(w, z))                   return EV_PERSON;
     if (pk >= STRONG_PEAK && w->hits[z] >= DIG_HITS)         return EV_DIGGING;
     return EV_ANIMAL;
 #endif

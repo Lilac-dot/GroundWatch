@@ -48,7 +48,7 @@ LABEL_WORDS = {"PERSON": ("footstep", "person", "walk"), "ANIMAL": ("animal", "d
                "BACKGROUND": ("background", "quiet")}
 
 # must match src/config.h for the rule baseline
-MED_PEAK, STRONG_PEAK, DIG_HITS = 40, 100, 3
+MED_PEAK, MED_PEAK_NIGHT, STRONG_PEAK, DIG_HITS = 40, 25, 100, 3
 
 
 # ---------------- features: the exact integer maths src/tree.c does ----------------
@@ -83,6 +83,7 @@ def features(df):
     fmin = np.where(hits > 0, first, 1 << 20).min(axis=1)
     out["spread_ms"] = np.where((hits > 0).sum(axis=1) >= 2, np.minimum(2000, f.max(axis=1) - fmin), 0)
     out["zone"] = z
+    out["night"] = df["night"].astype(int).to_numpy() if "night" in df else 0
     return out
 
 
@@ -91,7 +92,8 @@ def rule_baseline(F):
     # fusion_regular(): at least one gap (in-window or carried) and longest <= 2 x shortest
     reg = (F.hits_z > 0) & (F.gap_min > 0) & (F.gap_max <= 2 * F.gap_min)
     return np.select(
-        [F.hits_max == 0, (F.peak_z >= MED_PEAK) & reg, (F.peak_z >= STRONG_PEAK) & (F.hits_z >= DIG_HITS)],
+        [F.hits_max == 0, (F.peak_z >= np.where(F.night == 1, MED_PEAK_NIGHT, MED_PEAK)) & reg,
+         (F.peak_z >= STRONG_PEAK) & (F.hits_z >= DIG_HITS)],
         ["BACKGROUND", "PERSON", "DIGGING"], "ANIMAL")
 
 

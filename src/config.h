@@ -75,7 +75,11 @@
 #define TRIG_MIN_NIGHT  5       /* night mode: more sensitive */
 
 /* ---------------- Classification (peak |deviation| inside events) ---------------- */
-#define MED_PEAK        40      /* person-sized peaks */
+#define MED_PEAK        40      /* person-sized peaks, by day */
+#define MED_PEAK_NIGHT  25      /* at night: the quieter ground lets the trigger hear
+                                   smaller steps (TRIG_MIN_NIGHT), and this lets them
+                                   count as a person. Trade-off: animals are more
+                                   active at night. Tune from night recordings. */
 #define STRONG_PEAK     100     /* shovel / heavy impact */
 
 /* ---------------- Other sensors ---------------- */
