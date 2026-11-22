@@ -53,8 +53,8 @@ static void log_window(uint8_t ev, uint8_t z)
     for (i = 0; i < N_PIEZO; i++) { uart_putc(','); uart_putu(win.active[i]); }
     for (i = 0; i < N_PIEZO; i++) {      /* first hit in ms, '-' if none */
         uart_putc(',');
-        if (win.first[i] == T8_NONE) uart_putc('-');
-        else                         uart_putu(win.first[i] * 8u);
+        if (win.first[i] == FIRST_NONE) uart_putc('-');
+        else                            uart_putu(win.first[i]);
     }
     for (i = 0; i < N_PIEZO; i++) {      /* gaps need 2+ hits, '-' otherwise */
         uart_putc(',');
@@ -102,11 +102,11 @@ static void task_pir_light(void)
 
     if (!night && l < LDR_DARK) {
         night = 1;
-        sense_set_threshold(PIEZO_THR_NIGHT);
+        sense_set_threshold(TRIG_MIN_NIGHT);
         display_dirty = 1;
     } else if (night && l > LDR_LIGHT) {
         night = 0;
-        sense_set_threshold(PIEZO_THR_DAY);
+        sense_set_threshold(TRIG_MIN_DAY);
         display_dirty = 1;
     }
 }
@@ -135,7 +135,7 @@ static void task_classify(void)
         alarm_on    = 1;
         alarm_until = millis() + ALARM_MS;
     }
-    log_window(ev, z);
+    if (!sense_raw_mode()) log_window(ev, z);   /* raw mode: the UART carries samples */
 }
 
 /* 200 ms: buzzer beeps, LED on, LCD redrawn only when something changed */
@@ -159,7 +159,8 @@ static void task_display(void)
     display_dirty = 0;
 
     /* line 0: "PERSON   Zone C" while alarming, else "Listening   DAY" ("Motion" while the PIR is high) */
-    lcd_print_line(0, alarm_on ? ev_name[last_ev] : (pir_now ? "Motion" : "Listening"));
+    lcd_print_line(0, alarm_on ? ev_name[last_ev] :
+                      pir_now ? "Motion" : sense_raw_mode() ? "Raw 57600" : "Listening");
     if (alarm_on) {
         lcd_puts_at(0, 9, "Zone ");
         lcd_putc(zone_char[last_zone]);
@@ -201,8 +202,8 @@ void main(void)
     BUZZER    = 0;                       /* port pins come up high after reset */
     ALARM_LED = LED_OFF;
 
-    uart_init();
-    sense_init();
+    sense_init();                        /* reads the raw-mode jumper */
+    uart_init(sense_raw_mode());
     EA = 1;
 
     lcd_init();
@@ -210,7 +211,7 @@ void main(void)
     lcd_print_line(1, "Calibrating...");
 
     delay_ms(1500);                      /* let the piezo baselines settle */
-    uart_puts("GW,ready\r\n");
+    if (!sense_raw_mode()) uart_puts("GW,ready\r\n");
 
     sense_take_window(&win);             /* throw away the settling window */
     pir_seen = 0;

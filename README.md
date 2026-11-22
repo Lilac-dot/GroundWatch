@@ -22,20 +22,34 @@ A camera needs light and line of sight. A single PIR sensor gives false alarms a
  PIR (HC-SR501) ─────────── P3.2 ─────┘       └─ UART ── PC: log + live plot
 ```
 
-**Sampling.** Timer0 interrupts every 1 ms. The interrupt reads the three piezos. For each piezo it updates a few running values for the current window: peak amplitude, number of distinct hits, time above threshold, time of the first hit, the shortest and longest gap between hits, and the background noise level. The hit threshold adapts: it is four times the current noise level or the day/night minimum, whichever is larger, so wind or nearby traffic raises it automatically. Raw samples are never stored, so the whole sensing state fits in a few dozen bytes of RAM.
+**Sampling.** Timer0 runs in 8-bit auto-reload mode at 4 kHz and cycles through four slots: piezo L, piezo C, piezo R, LDR. Each slot collects the ADC conversion started in the previous slot and immediately starts the next one, so the 70 µs conversion overlaps with the processing instead of the CPU waiting for EOC. Every channel is sampled at about 1 kHz, with no timing jitter.
+
+**Detection.** Each piezo runs an STA/LTA trigger, the standard seismic event picker, with the adaptive-threshold idea from Koç & Yegin (2013):
+
+```
+d   = |sample - baseline|          baseline: ~256 ms average
+STA = ~16 ms average of d          short-term envelope
+LTA = ~2 s average of STA          background level (wind, traffic)
+event on  when STA > max(minimum, 3 x LTA)
+event off when STA < max(minimum / 2, 1.5 x LTA)
+```
+
+An event onset is a hit. Its time (1 ms resolution) gives the first-hit order for localization, and the gaps between onsets give the walking rhythm. Per 2 s window each piezo reports peak, hits, time inside events, first onset, shortest and longest gap, and background level. Raw samples are never stored, so this fits in a few dozen bytes of RAM. In the ucsim simulator the interrupt uses about 62% of the CPU.
+
+**Raw mode.** With P3.3 jumpered to GND at reset, the board also streams every sample to the PC at 57600 baud (L, C, R, then a 0xFF sync byte). `tools/groundwatch_raw.py` records these into labelled CSV files for building a dataset, and `build/replay` runs any recording through the same detector code on the PC.
 
 **Scheduling.** The main loop runs a countdown scheduler for the slower tasks:
 
 | Period | Task |
 |---|---|
-| 1 ms (ISR) | Sample piezos, update per-channel features and noise levels (about 0.88 ms of each 1 ms in the simulator) |
+| 250 µs (ISR) | One ADC slot: collect, start the next channel, run the STA/LTA step |
 | 10 ms | Latch the PIR output, switch day/night from the LDR |
 | 200 ms | Buzzer, LED, LCD |
 | 2 s | Classify the window, raise the alarm, log to UART |
 
 The PIR is polled rather than wired to INT0: the HC-SR501 output is active high, INT0 only triggers on a falling edge, and the module holds its output high for seconds, so a 10 ms poll can't miss it.
 
-**Localization.** The zone is the piezo that registered the first hit in the window. A tie goes to the stronger peak.
+**Localization.** The zone is the piezo with the earliest event onset in the window. A tie goes to the stronger peak. Onset times are logged per piezo, so finer localization from the time differences can be done on the PC.
 
 **Classification.** Each window goes through a fixed rule table. The first rule that matches wins:
 
@@ -47,7 +61,7 @@ The PIR is polled rather than wired to INT0: the HC-SR501 output is active high,
 | Medium peaks at a steady rhythm | person | alarm |
 | Anything else with PIR detection | animal | log |
 
-"Steady rhythm" means the longest gap between hits is at most twice the shortest. Footsteps pass this check; random taps from small animals usually fail it. At night the LDR lowers the piezo threshold.
+"Steady rhythm" means the longest gap between hits is at most twice the shortest. Footsteps pass this check; random taps from small animals usually fail it. At night the LDR lowers the minimum trigger level.
 
 ## Repository layout
 
@@ -114,7 +128,8 @@ Requires [SDCC](https://sdcc.sourceforge.net/) and `make`.
 
 ```sh
 make          # build/groundwatch.hex
-make test     # run the rule-table tests on the host
+make test     # rule-table tests, plus the detector run on synthetic footsteps and wind
+make replay   # build/replay: run a raw recording through the detector
 make clean
 ```
 
@@ -124,7 +139,16 @@ A VS Code workspace is included: `Cmd/Ctrl+Shift+B` builds, and the other tasks 
 
 ## Logging and tuning
 
-The thresholds in `src/config.h` are starting values. To set them from real data, record each kind of event on site:
+The thresholds in `src/config.h` are starting values. To set them from real data, record raw samples of each kind of event on site (P3.3 to GND at reset), then replay them through the detector while you adjust `config.h`:
+
+```sh
+python3 tools/groundwatch_raw.py /dev/cu.usbserial-0001 --label footstep --seconds 60
+make replay && ./build/replay recordings/footstep_*.csv
+```
+
+The detector tests (`make test`) also print the detection rate against step size in wind. With the current settings, steps under about 4x the noise amplitude are ignored and steps over 6x are always caught.
+
+For the feature log in normal mode:
 
 ```sh
 pip install pyserial matplotlib

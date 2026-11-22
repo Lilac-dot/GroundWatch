@@ -2,11 +2,15 @@
 #include "config.h"
 #include "uart.h"
 
-void uart_init(void)
+void uart_init(uint8_t fast)
 {
     TMOD = (TMOD & 0x0F) | 0x20;         /* Timer1 mode 2 (8-bit auto-reload) */
-    TH1  = 0xFD;                         /* 9600 baud @ 11.0592 MHz */
-    TL1  = 0xFD;
+    if (fast) {
+        PCON |= 0x80;                    /* SMOD: double the baud rate */
+        TH1 = TL1 = 0xFF;                /* 57600 baud @ 11.0592 MHz */
+    } else {
+        TH1 = TL1 = 0xFD;                /* 9600 baud @ 11.0592 MHz */
+    }
     SCON = 0x50;                         /* mode 1 */
     TR1  = 1;
     TI   = 0;

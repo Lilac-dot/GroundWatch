@@ -23,6 +23,7 @@
  * P3.2       <- PIR (HC-SR501) OUT, direct: motion = high (3.3 V, above
  *               the 1.9 V VIH of the AT89S52). Polled every 10 ms, because
  *               INT0 only fires on a falling edge.
+ * P3.3       <- raw-mode jumper: GND at reset streams raw samples at 57600
  * P3.0 / P3.1 <-> UART RXD / TXD to USB-UART module
  * P2.0 RS, P2.1 EN, P2.4-P2.7 D4-D7 -> 16x2 LCD (RW to GND)
  * P2.2       -> buzzer through BC547 / BC548 low-side switch (high = on)
@@ -35,6 +36,8 @@
 #define ADC_START       P0_3
 #define ADC_OE          P0_4
 #define ADC_EOC         P0_5
+
+#define RAW_MODE_PIN    P3_3                /* jumper to GND at reset = raw streaming */
 
 #define PIR_PIN         P3_2
 #define PIR_ACTIVE()    (PIR_PIN == 1)      /* HC-SR501 output is active high */
@@ -57,17 +60,17 @@
 
 /* ---------------- Timing (ms) ---------------- */
 #define WINDOW_MS       2000    /* classify period */
-#define HIT_DEADTIME_MS 150     /* one footstep rings for a while; count it once */
+#define HIT_DEADTIME_MS 100     /* onsets closer than this count as one hit */
 #define ALARM_MS        3000
 
-/* ---------------- Piezo thresholds (ADC counts above baseline, 8-bit) ---------------- */
-#define PIEZO_THR_DAY   25      /* minimum hit threshold by day */
-#define PIEZO_THR_NIGHT 15      /* night mode: more sensitive */
-/* Adaptive threshold: each piezo tracks its background noise (mean absolute
- * deviation from baseline, ~256 ms average) and a hit must exceed
- * noise << NOISE_MULT_SHIFT (4x by default) or the day/night minimum above,
- * whichever is larger. Wind and traffic raise the noise and the threshold with it. */
-#define NOISE_MULT_SHIFT 2
+/* ---------------- Event trigger (STA/LTA, see sense.c) ----------------
+ * STA = ~16 ms envelope of |deviation from baseline|, LTA = ~2 s background.
+ * An event starts when STA > max(TRIG_MIN, 3 x LTA) and ends when
+ * STA < max(TRIG_MIN / 2, 1.5 x LTA). Units: 8-bit ADC counts. */
+#define TRIG_MIN_DAY    8       /* minimum STA for an event by day */
+#define TRIG_MIN_NIGHT  5       /* night mode: more sensitive */
+
+/* ---------------- Classification (peak |deviation| inside events) ---------------- */
 #define MED_PEAK        40      /* person-sized peaks */
 #define STRONG_PEAK     100     /* shovel / heavy impact */
 

@@ -9,7 +9,7 @@ static window_t quiet(void)
 {
     window_t w;
     memset(&w, 0, sizeof w);
-    for (int i = 0; i < N_PIEZO; i++) { w.first[i] = T8_NONE; w.gap_min[i] = T8_NONE; }
+    for (int i = 0; i < N_PIEZO; i++) { w.first[i] = FIRST_NONE; w.gap_min[i] = T8_NONE; }
     return w;
 }
 
@@ -18,7 +18,7 @@ static void hits(window_t *w, int i, int n, int peak, int gap, int t0)
 {
     w->peak[i] = peak;
     w->hits[i] = n;
-    w->first[i] = t0 / 8;
+    w->first[i] = t0;
     if (n > 1) { w->gap_min[i] = gap / 8; w->gap_max[i] = gap / 8; }
 }
 

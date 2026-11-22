@@ -9,7 +9,7 @@ GroundWatch PC side: live log + plot of the 8051's 2-second windows.
     python3 tools/groundwatch_pc.py PORT --cloud              # also upload to Supabase
 
 Every row in the CSV is one window. Plot the peaks per class to pick the
-thresholds in src/config.h (PIEZO_THR_*, MED_PEAK, STRONG_PEAK, DIG_HITS).
+thresholds in src/config.h (TRIG_MIN_*, MED_PEAK, STRONG_PEAK, DIG_HITS).
 
 --cloud reads SUPABASE_URL and SUPABASE_SECRET_KEY from the environment or from
 a .env file at the repo root (copy .env.example). Never commit .env: the secret

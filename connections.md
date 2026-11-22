@@ -159,7 +159,7 @@ LM358 DIP-8 pinout: 1 OUT A, 2 IN A−, 3 IN A+, **4 GND**, 5 IN B+, 6 IN B−, 
 | 8051 P3.1 (TXD) | USB-UART adapter RX |
 | 8051 GND | USB-UART GND |
 
-Settings are 9600 baud, 8N1, and one line every 2 s. Run `python3 tools/groundwatch_pc.py <port>` to log and plot. If you use the board's own DB9/RS-232 port instead, it already connects to TXD, so don't add a TTL adapter at the same time.
+Settings are 9600 baud, 8N1, and one line every 2 s. In raw mode it's 57600 baud, binary. Run `python3 tools/groundwatch_pc.py <port>` to log and plot. If you use the board's own DB9/RS-232 port instead, it already connects to TXD, so don't add a TTL adapter at the same time.
 
 ---
 
@@ -179,9 +179,18 @@ Settings are 9600 baud, 8N1, and one line every 2 s. Run `python3 tools/groundwa
 | P2.4–P2.7 | LCD D4–D7 | out |
 | P3.1 | UART TXD | out |
 | P3.2 | PIR OUT (high = motion), 10 kΩ to GND | in |
+| P3.3 | raw-mode jumper (GND at reset = raw) | in |
 | ALE | 74LS74 CLK1 | clock out |
 
-Free pins: P3.0, P3.3–P3.7, P0.6, P0.7.
+Free pins: P3.0, P3.4–P3.7, P0.6, P0.7.
+
+## Raw-mode jumper (optional) → P3.3
+
+| From | To |
+|---|---|
+| 8051 P3.3 | GND through a jumper, only when you want raw mode |
+
+Leave P3.3 open for normal operation. The internal pull-up reads it as high. If P3.3 is grounded at power-up or reset, the board streams every piezo sample to the PC at **57600 baud**, and the LCD shows `Raw 57600`. Record the stream with `python3 tools/groundwatch_raw.py PORT --label footstep`. Detection, the LCD and the alarm keep working. Only the text log is replaced.
 
 ## Bring-up order
 
