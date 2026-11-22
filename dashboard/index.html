@@ -8,13 +8,18 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231F3D2E'/%3E%3Cpath d='M6 21c4-1 6-6 10-6s6 5 10 6' stroke='%23DCC8A3' stroke-width='2.4' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='11' r='2.4' fill='%23DCC8A3'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <!-- ======================= sign in ======================= -->
   <main id="login" class="login" hidden>
-    <form class="login-card" id="login-form">
+    <svg class="login-waves" viewBox="0 0 1200 400" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 260 C150 210 260 300 420 250 S700 170 860 230 1080 300 1200 240"/>
+      <path d="M0 290 C160 240 280 330 440 280 S720 200 880 260 1090 330 1200 270"/>
+      <path d="M0 320 C170 270 300 360 460 310 S740 230 900 290 1100 360 1200 300"/>
+    </svg>
+    <form class="login-card rise" id="login-form">
       <div class="brand brand-lg">
         <span class="brand-mark" aria-hidden="true"></span>
         <span>GroundWatch</span>
@@ -37,123 +42,105 @@
       </div>
       <nav class="nav" aria-label="Sections">
         <a href="#overview" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z"/></svg>Overview</a>
+        <a href="#boundary"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg>Boundary</a>
         <a href="#activity"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h4l2.5-6 4 11 2.5-5H21"/></svg>Activity</a>
-        <a href="#events"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z"/></svg>Events</a>
-        <a href="#sensors"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg>Sensors</a>
+        <a href="#events"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12v16l-6-4-6 4z"/></svg>Detections</a>
       </nav>
       <div class="sidebar-foot">
-        <div class="sidebar-tip">
-          <span class="tip-title">Field note</span>
-          <span id="tip-text">Footsteps arrive at a steady rhythm. Animals don't.</span>
-        </div>
-        <button class="btn btn-side" id="theme-btn" type="button" aria-label="Switch colour theme">Theme</button>
-        <button class="btn btn-side" id="signout-btn" type="button">Sign out</button>
+        <button class="btn btn-side" id="theme-btn" type="button" aria-label="Switch colour theme">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>Theme</button>
+        <button class="btn btn-side" id="signout-btn" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 8l-4 4 4 4M6 12h10"/></svg>Sign out</button>
       </div>
     </aside>
 
     <div class="main">
-      <header class="topbar" id="overview">
-        <div>
-          <h1 id="greeting">Welcome back</h1>
-          <p class="sub" id="subtitle">Three piezo zones along the boundary</p>
+      <header class="topbar">
+        <div class="crumb">
+          <span class="kicker">Boundary</span><span class="crumb-slash">/</span>
+          <label class="device-pick"><span class="sr-only">Device</span><select id="device"></select></label>
         </div>
-        <div class="chips">
-          <span class="chip" id="preview-chip" hidden>Sample data</span>
+        <div class="top-right">
+          <span class="chip chip-warn" id="preview-chip" hidden>Sample data</span>
           <span class="chip" id="conn-chip"><span class="dot"></span><span id="conn-text">Connecting…</span></span>
-          <span class="chip" id="clock"></span>
+          <span class="clock" id="clock"></span>
         </div>
       </header>
 
-      <div class="filters" role="group" aria-label="Filters">
-        <label class="select">Device
-          <select id="device"></select>
-        </label>
-        <div class="seg" role="radiogroup" aria-label="Time range" id="range">
-          <button type="button" role="radio" data-h="1" aria-checked="true">Last hour</button>
-          <button type="button" role="radio" data-h="6" aria-checked="false">6 hours</button>
-          <button type="button" role="radio" data-h="24" aria-checked="false">24 hours</button>
+      <section class="heading" id="overview">
+        <div>
+          <p class="kicker eyebrow"><span class="eyebrow-line"></span><span id="eyebrow-date"></span></p>
+          <h1>Ground overview<span class="accent">.</span></h1>
+          <p class="sub" id="subtitle">Three piezo zones along the boundary</p>
         </div>
-      </div>
-
-      <section class="grid grid-top">
-        <article class="card status" id="status-card" aria-live="polite">
-          <div class="status-icon" id="status-icon" aria-hidden="true"></div>
-          <div>
-            <p class="eyebrow" id="status-eyebrow">Status</p>
-            <p class="status-title" id="status-title">All quiet</p>
-            <p class="status-sub" id="status-sub">Listening on all three zones</p>
-          </div>
-        </article>
-
-        <article class="card map-card" id="sensors">
-          <div class="card-head">
-            <h2>The boundary</h2>
-            <span class="muted small" id="map-note">Latest activity by zone</span>
-          </div>
-          <svg class="map" id="map" viewBox="0 0 360 166" role="img" aria-label="Map of the three sensor zones"></svg>
-        </article>
-
-        <div class="tiles">
-          <article class="card tile"><p class="tile-label">Alarms</p><p class="tile-value" id="t-alarms">–</p><p class="tile-foot" id="t-alarms-foot">in range</p></article>
-          <article class="card tile"><p class="tile-label">Detections</p><p class="tile-value" id="t-events">–</p><p class="tile-foot">person, digging, animal</p></article>
-          <article class="card tile"><p class="tile-label">Last window</p><p class="tile-value" id="t-seen">–</p><p class="tile-foot" id="t-seen-foot">from the board</p></article>
-          <article class="card tile"><p class="tile-label">Light</p><p class="tile-value" id="t-light">–</p><p class="tile-foot" id="t-light-foot">LDR reading</p></article>
+        <div class="seg" role="radiogroup" aria-label="Time range" id="range">
+          <span class="seg-thumb" aria-hidden="true"></span>
+          <button type="button" role="radio" data-h="1" aria-checked="true">1h</button>
+          <button type="button" role="radio" data-h="6" aria-checked="false">6h</button>
+          <button type="button" role="radio" data-h="24" aria-checked="false">24h</button>
         </div>
       </section>
 
-      <section class="grid grid-mid">
+      <section class="stats" aria-label="Summary">
+        <article class="card stat status" id="status-card" aria-live="polite">
+          <div class="stat-top"><span class="kicker" id="status-eyebrow">Status</span><span class="stat-icon" id="status-icon"></span></div>
+          <p class="stat-value status-title" id="status-title">All quiet</p>
+          <p class="stat-foot" id="status-sub">Listening on all three zones</p>
+        </article>
+        <article class="card stat">
+          <div class="stat-top"><span class="kicker">Alarms</span><span class="stat-icon ic-alarm"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></svg></span></div>
+          <p class="stat-value" id="t-alarms">0</p>
+          <div class="stat-foot"><span id="t-alarms-foot">last hour</span><span class="mini-bars" id="alarm-bars" aria-hidden="true"></span></div>
+        </article>
+        <article class="card stat">
+          <div class="stat-top"><span class="kicker">Detections</span><span class="stat-icon ic-river"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M5.6 5.6a9 9 0 0 0 0 12.8M18.4 5.6a9 9 0 0 1 0 12.8"/></svg></span></div>
+          <p class="stat-value" id="t-events">0</p>
+          <p class="stat-foot" id="t-events-foot">person, digging, animal</p>
+        </article>
+        <article class="card stat">
+          <div class="stat-top"><span class="kicker">Light</span><span class="stat-icon ic-sun" id="light-icon"></span></div>
+          <p class="stat-value" id="t-light">–</p>
+          <p class="stat-foot" id="t-light-foot">LDR reading</p>
+        </article>
+      </section>
+
+      <section class="card map-card" id="boundary">
+        <div class="card-head">
+          <div>
+            <p class="kicker">Field layout · peak in last 5 min</p>
+            <h2>The boundary</h2>
+          </div>
+          <div class="legend" id="map-legend"></div>
+        </div>
+        <svg class="map" id="map" viewBox="0 0 1000 300" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Map of the three sensor zones"></svg>
+      </section>
+
+      <section class="duo">
         <article class="card" id="activity">
           <div class="card-head">
-            <h2>Ground activity</h2>
-            <button class="link-btn" type="button" data-table="activity">Table</button>
+            <div>
+              <p class="kicker" id="activity-kicker">Strongest vibration per minute</p>
+              <h2>Ground activity</h2>
+            </div>
+            <button class="pill-btn" type="button" data-table="activity">Table</button>
           </div>
-          <p class="muted small" id="activity-sub">Strongest vibration per minute, by zone (ADC counts above baseline)</p>
-          <div class="legend" id="activity-legend"></div>
           <div class="chart" id="chart-activity"></div>
           <div class="table-wrap" id="table-activity" hidden></div>
         </article>
 
         <article class="card feed-card" id="events">
           <div class="card-head">
-            <h2>Recent detections</h2>
-            <span class="muted small" id="feed-count"></span>
+            <div>
+              <p class="kicker" id="feed-count">In range</p>
+              <h2>Recent detections</h2>
+            </div>
           </div>
           <ol class="feed" id="feed"></ol>
           <p class="empty" id="feed-empty" hidden>Nothing detected in this range.</p>
         </article>
       </section>
 
-      <section class="grid grid-low">
-        <article class="card">
-          <div class="card-head">
-            <h2>Alarms per hour</h2>
-            <button class="link-btn" type="button" data-table="alarms">Table</button>
-          </div>
-          <p class="muted small">Person and digging events</p>
-          <div class="chart chart-sm" id="chart-alarms"></div>
-          <div class="table-wrap" id="table-alarms" hidden></div>
-        </article>
-        <article class="card">
-          <div class="card-head">
-            <h2>Hits by zone</h2>
-            <button class="link-btn" type="button" data-table="zones">Table</button>
-          </div>
-          <p class="muted small">Footfall-like onsets in range</p>
-          <div class="chart chart-sm" id="chart-zones"></div>
-          <div class="table-wrap" id="table-zones" hidden></div>
-        </article>
-        <article class="card">
-          <div class="card-head">
-            <h2>Light level</h2>
-            <button class="link-btn" type="button" data-table="light">Table</button>
-          </div>
-          <p class="muted small">LDR, per minute. Below the line the board is in night mode.</p>
-          <div class="chart chart-sm" id="chart-light"></div>
-          <div class="table-wrap" id="table-light" hidden></div>
-        </article>
-      </section>
-
-      <footer class="foot muted small">GroundWatch · MPMC project · data refreshes live</footer>
+      <footer class="foot">GroundWatch · MPMC project</footer>
     </div>
   </div>
 

@@ -1,9 +1,10 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
 import { SUPABASE_URL, SUPABASE_KEY, DEVICES, ONLINE_SECONDS, LDR_DARK } from "./config.js";
-import { lineChart, barChart, table } from "./charts.js";
+import { lineChart, table } from "./charts.js";
 
 const $ = (id) => document.getElementById(id);
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const ZONES = [
   { key: "l", name: "Left", short: "L", color: "var(--zone-l)" },
@@ -13,6 +14,8 @@ const ZONES = [
 const ZONE_BY_LETTER = { L: ZONES[0], C: ZONES[1], R: ZONES[2] };
 const ALARMS = new Set(["PERSON", "DIGGING"]);
 const ALARM_HOLD_S = 30;   // the status card stays red this long after an alarm
+const FEED_MAX = 6;        // recent detections shown
+const SPARK_BARS = 12;     // bars in the alarms card
 
 const ICONS = {
   PERSON: '<path d="M9 4.5c1.4 0 2.2 1.5 2 3.4-.2 1.8-1.2 3.1-2.3 3-1.1 0-1.8-1.5-1.6-3.3C7.3 5.7 8 4.5 9 4.5zM8.6 13.2c1 0 1.6.8 1.4 1.9l-.3 1.6c-.2 1-1 1.6-1.8 1.4-.8-.1-1.2-1-1-2l.3-1.5c.2-.9.7-1.4 1.4-1.4zM15.4 8c1 0 1.7 1.3 1.6 2.8-.2 1.6-1.1 2.7-2 2.6-1 0-1.6-1.3-1.4-2.9.2-1.5.9-2.5 1.8-2.5zM15 15.6c.8 0 1.3.7 1.2 1.6l-.2 1.3c-.2.9-.9 1.4-1.6 1.2-.7-.1-1-.9-.9-1.7l.3-1.3c.1-.7.6-1.1 1.2-1.1z"/>',
@@ -21,16 +24,11 @@ const ICONS = {
   NOISE: '<path d="M3 9h11a3 3 0 1 0-3-3M3 13h15a3 3 0 1 1-3 3M3 17h7"/>',
   QUIET: '<path d="M12 21c-4-3-7-6.5-7-10.5A7 7 0 0 1 12 3a7 7 0 0 1 7 7.5c0 4-3 7.5-7 10.5z"/><path d="M12 8v6M9.5 11.5 12 14l2.5-2.5"/>',
   OFFLINE: '<path d="M4 8.5a12 12 0 0 1 16 0M7 12a7.5 7.5 0 0 1 10 0M10 15.5a3 3 0 0 1 4 0"/><path d="M4 4l16 16"/>',
+  SUN: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+  MOON: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
 };
 const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg>`;
 const EVENT_TEXT = { PERSON: "Person", DIGGING: "Digging", ANIMAL: "Animal", NOISE: "Noise" };
-const TIPS = [
-  "Footsteps arrive at a steady rhythm. Animals don't.",
-  "The zone is whichever piezo felt the step first.",
-  "Wind raises the background level, and the trigger rises with it.",
-  "At night the board lowers its trigger level.",
-  "No PIR, no alarm: ground noise alone is logged, not raised.",
-];
 
 // ------------------------------ state ------------------------------
 const state = {
@@ -41,6 +39,7 @@ const state = {
   events: [],    // non-NONE windows, newest first
   latest: null,  // newest window of any kind
   channel: null,
+  animate: true, // play chart / list entrances on the next render
 };
 
 // ------------------------------ auth ------------------------------
@@ -50,7 +49,7 @@ async function boot() {
   const { data } = await sb.auth.getSession();
   if (data.session) startApp(data.session);
   else showLogin();
-  sb.auth.onAuthStateChange((evt, session) => {
+  sb.auth.onAuthStateChange((evt) => {
     if (evt === "SIGNED_OUT") showLogin();
   });
 }
@@ -86,11 +85,14 @@ function initShell() {
   const sel = $("device");
   sel.replaceChildren(...DEVICES.map((d) => { const o = document.createElement("option"); o.value = o.textContent = d; return o; }));
   sel.value = state.device;
-  sel.onchange = () => { state.device = sel.value; reload(); };
+  sel.onchange = () => { state.device = sel.value; state.animate = true; setEyebrow(); reload(); };
   for (const b of $("range").querySelectorAll("button")) {
     b.onclick = () => {
+      if (b.getAttribute("aria-checked") === "true") return;
       for (const x of $("range").querySelectorAll("button")) x.setAttribute("aria-checked", x === b);
       state.hours = +b.dataset.h;
+      state.animate = true;
+      moveThumb();
       reload();
     };
   }
@@ -100,15 +102,37 @@ function initShell() {
       t.hidden = !t.hidden;
       chart.hidden = !t.hidden;
       b.textContent = t.hidden ? "Table" : "Chart";
+      if (t.hidden) { state.animate = true; render(); }
     };
   }
-  const h = new Date().getHours();
-  $("greeting").textContent = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-  $("tip-text").textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
+  // nav highlight follows the section in view
+  const links = [...document.querySelectorAll(".nav a")];
+  const io = new IntersectionObserver((entries) => {
+    for (const en of entries) if (en.isIntersecting) {
+      for (const a of links) a.classList.toggle("active", a.getAttribute("href") === `#${en.target.id}`);
+    }
+  }, { rootMargin: "-40% 0px -55% 0px" });
+  for (const a of links) { const s = document.querySelector(a.getAttribute("href")); if (s) io.observe(s); }
+
+  // staggered entrance; class removed afterwards so hover transforms still work
+  document.querySelectorAll(".heading, .stats .card, .map-card, .duo .card").forEach((n, i) => {
+    n.style.setProperty("--i", i);
+    n.classList.add("rise");
+    n.addEventListener("animationend", (e) => { if (e.animationName === "rise") n.classList.remove("rise"); }, { once: false });
+  });
+
+  $("map-legend").replaceChildren(...ZONES.map((z) => {
+    const s = document.createElement("span"), i = document.createElement("i");
+    i.style.background = z.color;
+    s.append(i, document.createTextNode(z.name));
+    return s;
+  }));
   drawMapBase();
+  setEyebrow();
   tickClock();
   setInterval(tickClock, 1000);
-  addEventListener("resize", debounce(render, 150));
+  requestAnimationFrame(moveThumb);
+  addEventListener("resize", debounce(() => { moveThumb(); render(); }, 150));
 }
 
 async function startApp() {
@@ -213,141 +237,162 @@ function addWindow(w) {
 
 // ------------------------------ render ------------------------------
 function render() {
+  if ($("app").hidden) return;
   const now = Date.now(), t0 = now - state.hours * 3600e3;
   const mins = state.minutes.filter((m) => m.t >= t0);
   const evs = state.events.filter((e) => new Date(e.created_at).getTime() >= t0);
+  const animate = state.animate;
+  state.animate = false;
 
   renderStatus(now);
-  renderTiles(now, mins);
+  renderStats(now, t0, mins, animate);
   renderMap(now, mins);
-  renderFeed(evs);
+  renderFeed(evs, animate);
 
-  // ground activity
-  $("activity-legend").replaceChildren(...ZONES.map((z) => {
-    const s = document.createElement("span"), i = document.createElement("i");
-    i.style.background = z.color;
-    s.append(i, document.createTextNode(`${z.name} (${z.short})`));
-    return s;
-  }));
-  // longer ranges group minutes (strongest reading per group) so the lines stay readable
+  // ground activity; longer ranges group minutes (strongest reading per group)
   const stepMin = state.hours === 1 ? 1 : state.hours === 6 ? 5 : 15;
   const grouped = groupPeaks(mins, stepMin * 60e3);
-  const per = stepMin === 1 ? "minute" : `${stepMin} minutes`;
-  $("activity-sub").textContent = `Strongest vibration per ${per}, by zone (ADC counts above baseline)`;
-  lineChart($("chart-activity"), {
-    t0, t1: now, label: `Strongest vibration per ${per} by zone`,
-    series: ZONES.map((z) => ({ name: z.name, short: z.short, color: z.color })),
-    points: grouped.map((m) => ({ t: m.t, values: [m.peak_l, m.peak_c, m.peak_r] })),
-    ymin: 20, endLabels: true, gapMs: stepMin * 60e3 * 2,
-  });
+  const per = stepMin === 1 ? "minute" : `${stepMin} min`;
+  $("activity-kicker").textContent = `Strongest vibration per ${per} · by zone`;
+  if (!$("chart-activity").hidden) {
+    lineChart($("chart-activity"), {
+      t0, t1: now, label: `Strongest vibration per ${per} by zone (ADC counts above baseline)`,
+      series: ZONES.map((z) => ({ name: z.name, short: z.short, color: z.color })),
+      points: grouped.map((m) => ({ t: m.t, values: [m.peak_l, m.peak_c, m.peak_r] })),
+      ymin: 20, endLabels: true, gapMs: stepMin * 60e3 * 2, animate,
+    });
+  }
   table($("table-activity"), [stepMin === 1 ? "Minute" : "From", "Left", "Centre", "Right"],
     [...grouped].reverse().map((m) => [fmtTime(m.t), m.peak_l, m.peak_c, m.peak_r]));
-
-  // alarms per hour (or per 10 min for the 1 h view)
-  const bucket = state.hours === 1 ? 10 * 60e3 : 3600e3;
-  const n = Math.round((state.hours * 3600e3) / bucket);
-  const start = Math.floor(now / bucket) * bucket - (n - 1) * bucket;
-  const counts = Array.from({ length: n }, (_, i) => ({ t: start + i * bucket, v: 0 }));
-  for (const m of mins) {
-    const i = Math.floor((m.t - start) / bucket);
-    if (i >= 0 && i < n) counts[i].v += m.person + m.digging;
-  }
-  const alarmsTitle = state.hours === 1 ? "Alarms per 10 minutes" : "Alarms per hour";
-  $("chart-alarms").closest(".card").querySelector("h2").textContent = alarmsTitle;
-  barChart($("chart-alarms"), {
-    label: alarmsTitle, unit: "alarms",
-    bars: counts.map((c) => ({
-      label: fmtTime(c.t), value: c.v, color: "var(--series-alarm)",
-      tip: `${fmtTime(c.t)} – ${fmtTime(c.t + bucket)}`,
-    })),
-  });
-  table($("table-alarms"), ["From", "Alarms"], [...counts].reverse().map((c) => [fmtTime(c.t), c.v]));
-
-  // hits by zone
-  const hits = ZONES.map((z) => mins.reduce((a, m) => a + (m[`hits_${z.key}`] || 0), 0));
-  barChart($("chart-zones"), {
-    horizontal: true, label: "Hits by zone", unit: "hits",
-    bars: ZONES.map((z, i) => ({ label: z.name, value: hits[i], color: z.color })),
-  });
-  table($("table-zones"), ["Zone", "Hits"], ZONES.map((z, i) => [z.name, hits[i]]));
-
-  // light
-  lineChart($("chart-light"), {
-    t0, t1: now, label: "Light level per minute",
-    series: [{ name: "Light (LDR)", color: "var(--series-light)" }],
-    points: mins.filter((m) => m.ldr != null).map((m) => ({ t: m.t, values: [m.ldr] })),
-    ymax: 256, ref: { value: LDR_DARK, label: "night" },
-  });
-  table($("table-light"), ["Minute", "LDR", "Mode"],
-    [...mins].reverse().map((m) => [fmtTime(m.t), m.ldr ?? "–", m.night ? "night" : "day"]));
 }
 
+let lastAlarmKey = null;
 function renderStatus(now) {
   const card = $("status-card"), lat = state.latest;
   const lastAlarm = state.events.find((e) => ALARMS.has(e.event));
   const alarmAge = lastAlarm ? (now - new Date(lastAlarm.created_at).getTime()) / 1000 : Infinity;
   const seenAge = lat ? (now - new Date(lat.created_at).getTime()) / 1000 : Infinity;
-  card.classList.toggle("alarm", alarmAge < ALARM_HOLD_S);
-  if (alarmAge < ALARM_HOLD_S) {
+  const alarmOn = alarmAge < ALARM_HOLD_S;
+  card.classList.toggle("alarm", alarmOn);
+  card.classList.toggle("offline", !alarmOn && seenAge > ONLINE_SECONDS);
+  let key;
+  if (alarmOn) {
+    key = lastAlarm.event;
     const z = ZONE_BY_LETTER[lastAlarm.zone];
-    $("status-icon").innerHTML = icon(lastAlarm.event);
     $("status-eyebrow").textContent = "Alarm";
     $("status-title").textContent = `${EVENT_TEXT[lastAlarm.event]} detected`;
-    $("status-sub").textContent = `${z ? `${z.name} zone (${z.short})` : "Zone unknown"} · ${ago(alarmAge)}`;
-    $("status-icon").style.cssText = "";
+    $("status-sub").textContent = `${z ? `${z.name} zone` : "Zone unknown"} · ${ago(alarmAge)}`;
+    // shake once per new alarm
+    const ak = lastAlarm.created_at;
+    if (ak !== lastAlarmKey) {
+      lastAlarmKey = ak;
+      card.classList.remove("fresh"); void card.offsetWidth; card.classList.add("fresh");
+      card.addEventListener("animationend", () => card.classList.remove("fresh"), { once: true });
+    }
   } else if (seenAge > ONLINE_SECONDS) {
-    $("status-icon").innerHTML = icon("OFFLINE");
-    $("status-icon").style.cssText = "background: var(--warn-bg); color: var(--warn)";
+    key = "OFFLINE";
     $("status-eyebrow").textContent = "Status";
     $("status-title").textContent = lat ? "Board offline" : "No data yet";
-    $("status-sub").textContent = lat ? `Last window ${ago(seenAge)}` : "Start the bridge: groundwatch_pc.py --cloud";
+    $("status-sub").textContent = lat ? `Last heard ${ago(seenAge)}` : "Start the bridge to see data";
   } else {
-    $("status-icon").innerHTML = icon("QUIET");
-    $("status-icon").style.cssText = "";
+    key = "QUIET";
     $("status-eyebrow").textContent = "Status";
     $("status-title").textContent = "All quiet";
     $("status-sub").textContent = lastAlarm ? `Last alarm ${ago(alarmAge)}` : "Listening on all three zones";
   }
+  const ic = $("status-icon");
+  if (ic.dataset.k !== key) { ic.dataset.k = key; ic.innerHTML = icon(key); }
   if (!state.preview || seenAge <= ONLINE_SECONDS) setConn(seenAge <= ONLINE_SECONDS ? "on" : "off",
     seenAge <= ONLINE_SECONDS ? "Board online" : lat ? `Seen ${ago(seenAge)}` : "No data yet");
 }
 
-function renderTiles(now, mins) {
-  const alarms = mins.reduce((a, m) => a + m.person + m.digging, 0);
-  const dets = mins.reduce((a, m) => a + m.person + m.digging + m.animal, 0);
-  $("t-alarms").textContent = alarms;
+function renderStats(now, t0, mins, animate) {
+  const tot = (k) => mins.reduce((a, m) => a + (m[k] || 0), 0);
+  const person = tot("person"), digging = tot("digging"), animal = tot("animal");
+  countTo($("t-alarms"), person + digging);
+  countTo($("t-events"), person + digging + animal);
   $("t-alarms-foot").textContent = `last ${state.hours === 1 ? "hour" : `${state.hours} hours`}`;
-  $("t-events").textContent = dets;
-  const lat = state.latest;
+  $("t-events-foot").textContent = `${person} person · ${digging} digging · ${animal} animal`;
+
+  // alarm sparkline: SPARK_BARS equal buckets across the range
+  const span = (now - t0) / SPARK_BARS, counts = new Array(SPARK_BARS).fill(0);
+  for (const m of mins) {
+    const i = Math.min(SPARK_BARS - 1, Math.floor((m.t - t0) / span));
+    if (i >= 0) counts[i] += m.person + m.digging;
+  }
+  const max = Math.max(...counts, 1), bars = $("alarm-bars");
+  if (animate || bars.children.length !== SPARK_BARS) {
+    bars.replaceChildren(...counts.map((_, i) => { const b = document.createElement("i"); b.style.setProperty("--i", i); return b; }));
+  }
+  counts.forEach((c, i) => {
+    const b = bars.children[i];
+    b.style.height = `${Math.max(12, (c / max) * 100)}%`;
+    b.classList.toggle("zero", c === 0);
+  });
+
+  const lat = state.latest, li = $("light-icon");
   if (lat) {
-    const age = (now - new Date(lat.created_at).getTime()) / 1000;
-    $("t-seen").textContent = age < 60 ? `${Math.round(age)} s` : ago(age).replace(" ago", "");
-    $("t-seen-foot").textContent = `ago · ${new Date(lat.created_at).toLocaleTimeString()}`;
-    $("t-light").textContent = lat.night ? "Night" : "Day";
+    const night = !!lat.night;
+    $("t-light").textContent = night ? "Night" : "Day";
     $("t-light-foot").textContent = `LDR ${lat.ldr ?? "–"} · night below ${LDR_DARK}`;
+    const k = night ? "MOON" : "SUN";
+    if (li.dataset.k !== k) { li.dataset.k = k; li.innerHTML = icon(k); li.classList.toggle("night", night); }
   } else {
-    for (const id of ["t-seen", "t-light"]) $(id).textContent = "–";
+    $("t-light").textContent = "–";
+    if (!li.dataset.k) { li.dataset.k = "SUN"; li.innerHTML = icon("SUN"); }
   }
 }
 
+// numbers roll from their old value to the new one
+function countTo(node, target) {
+  const from = node._v ?? 0;
+  node._v = target;
+  if (from === target) { if (!node._raf) node.textContent = target; return; }
+  if (from !== target && node._started) { node.classList.remove("bump"); void node.offsetWidth; node.classList.add("bump"); }
+  node._started = true;
+  if (reduceMotion()) { node.textContent = target; return; }
+  const t0 = performance.now(), dur = 800;
+  cancelAnimationFrame(node._raf);
+  const step = (t) => {
+    const p = Math.min(1, (t - t0) / dur), e = 1 - (1 - p) ** 3;
+    node.textContent = Math.round(from + (target - from) * e);
+    node._raf = p < 1 ? requestAnimationFrame(step) : 0;
+  };
+  node._raf = requestAnimationFrame(step);
+}
+
 // ------------------------------ map ------------------------------
-const ZX = [70, 180, 290];
+const ZX = [210, 500, 790], FY = 158;
 function drawMapBase() {
   const svg = $("map");
+  const trees = [[60, 70], [110, 48], [150, 84], [340, 40], [655, 60], [880, 44], [930, 82], [70, 250], [400, 268], [610, 262], [930, 250]];
   svg.innerHTML = `
-    <rect class="field" x="4" y="4" width="352" height="158" rx="16"/>
-    <g class="trees">${[[22, 30], [40, 22], [330, 28], [312, 138], [30, 136], [345, 128], [150, 24], [212, 150]]
-      .map(([x, y]) => `<circle class="tree" cx="${x}" cy="${y}" r="${9 + (x % 5)}"/>`).join("")}</g>
-    <path class="path" d="M18 146 C 90 134, 140 154, 200 143 S 300 132, 344 141"/>
-    <path class="fence" d="M14 60 H 346"/>
+    <g class="contours">
+      <path class="contour" d="M-20 70 C120 40 220 95 360 62 S600 20 720 55 900 90 1020 50"/>
+      <path class="contour c2" d="M-20 40 C130 14 240 64 380 34 S610 -4 730 26 910 60 1040 20"/>
+      <path class="contour" d="M-20 250 C110 220 230 275 380 240 S640 200 760 236 920 270 1020 236"/>
+      <path class="contour c3" d="M-20 280 C120 252 250 300 400 268 S650 232 780 262 930 296 1040 262"/>
+    </g>
+    <path class="stream" d="M655 300 C640 260 680 230 662 196 S690 120 672 80 698 20 690 -10"/>
+    <path class="trail" d="M20 272 C150 258 260 284 420 266 S700 254 820 268 940 262 990 256"/>
+    ${trees.map(([x, y], i) => `<circle class="tree" cx="${x}" cy="${y}" r="${13 + (x % 7)}" style="animation-delay:${-i * 0.7}s"/>`).join("")}
+    <text class="place" x="40" y="128">OUTSIDE ↑</text>
+    <text class="place" x="40" y="200">INSIDE ↓</text>
+    <path class="fence" d="M30 ${FY} H970"/>
+    <path class="wave" d="M30 ${FY} H970"/>
     ${ZONES.map((z, i) => `
       <g data-zone="${z.short}">
-        <circle class="ring-pulse" cx="${ZX[i]}" cy="60" r="24" fill="none" stroke-width="2" style="stroke:${z.color}" opacity="0"/>
-        <circle class="zone-ring" cx="${ZX[i]}" cy="60" r="18" style="stroke:${z.color}"/>
-        <circle class="zone-dot" cx="${ZX[i]}" cy="60" r="8" style="fill:${z.color}"/>
-        <text class="zone-label" x="${ZX[i]}" y="34">${z.name}</text>
-        <text class="zone-val" x="${ZX[i]}" y="100" id="map-val-${z.short}">–</text>
-        <text class="zone-cap" x="${ZX[i]}" y="112">peak · 5 min</text>
+        <circle class="idle" cx="${ZX[i]}" cy="${FY}" r="22" style="stroke:${z.color};animation-delay:${i * 1.05}s"/>
+        <circle class="ring-pulse r1" cx="${ZX[i]}" cy="${FY}" r="22" style="stroke:${z.color}"/>
+        <circle class="ring-pulse r2" cx="${ZX[i]}" cy="${FY}" r="22" style="stroke:${z.color}"/>
+        <circle class="ring-pulse r3" cx="${ZX[i]}" cy="${FY}" r="22" style="stroke:${z.color}"/>
+        <g class="node" style="animation-delay:${300 + i * 150}ms">
+          <circle class="zone-ring" cx="${ZX[i]}" cy="${FY}" r="24" style="stroke:${z.color}"/>
+          <circle class="zone-dot" cx="${ZX[i]}" cy="${FY}" r="12" style="fill:${z.color}"/>
+        </g>
+        <text class="zone-label" x="${ZX[i]}" y="${FY - 46}">${z.name}</text>
+        <text class="zone-val" x="${ZX[i]}" y="${FY + 64}" id="map-val-${z.short}">0</text>
+        <text class="zone-cap" x="${ZX[i]}" y="${FY + 84}">PEAK</text>
       </g>`).join("")}`;
 }
 
@@ -355,49 +400,45 @@ function renderMap(now, mins) {
   const last5 = mins.filter((m) => m.t >= now - 5 * 60e3);
   ZONES.forEach((z) => {
     const peak = last5.reduce((a, m) => Math.max(a, m[`peak_${z.key}`] || 0), 0);
-    $(`map-val-${z.short}`).textContent = peak;
+    countTo($(`map-val-${z.short}`), peak);
   });
   const f = state.flash;
   for (const g of $("map").querySelectorAll("[data-zone]")) {
-    const ring = g.querySelector(".ring-pulse");
-    const hot = f && f.zone === g.dataset.zone && now - f.at < 12000;
-    ring.classList.toggle("hot", !!hot);
-    ring.setAttribute("opacity", hot ? "1" : "0");
+    const hot = !!(f && f.zone === g.dataset.zone && now - f.at < 12000);
+    for (const r of g.querySelectorAll(".ring-pulse")) r.classList.toggle("hot", hot);
   }
 }
 
 // ------------------------------ feed ------------------------------
 let feedKeys = new Set();
-function renderFeed(evs) {
+function renderFeed(evs, animate) {
   const list = $("feed");
-  const shown = evs.slice(0, 40);
+  const shown = evs.slice(0, FEED_MAX);
   $("feed-empty").hidden = shown.length > 0;
-  $("feed-count").textContent = evs.length ? `${evs.length} in range` : "";
+  $("feed-count").textContent = evs.length ? `${evs.length} in range` : "In range";
   const keys = new Set();
-  list.replaceChildren(...shown.map((e) => {
+  list.replaceChildren(...shown.map((e, idx) => {
     const key = `${e.created_at}${e.event}`;
     keys.add(key);
     const li = document.createElement("li");
-    if (feedKeys.size && !feedKeys.has(key)) li.className = "new";
+    if (animate) { li.className = "enter"; li.style.setProperty("--i", idx); }
+    else if (feedKeys.size && !feedKeys.has(key)) li.className = "new";
     const ic = document.createElement("span");
     ic.className = `ic ${ALARMS.has(e.event) ? "alarm" : e.event === "ANIMAL" ? "warn" : "calm"}`;
     ic.innerHTML = icon(e.event);
     const body = document.createElement("div");
     const what = document.createElement("div");
     what.className = "what";
-    what.textContent = EVENT_TEXT[e.event] + (ALARMS.has(e.event) ? " · alarm" : e.event === "NOISE" ? " · ignored" : " · logged");
+    what.textContent = EVENT_TEXT[e.event];
     const meta = document.createElement("div");
     meta.className = "meta";
-    const z = e.zone && e.zone.toLowerCase();
-    const pk = z ? e[`peak_${z}`] : Math.max(e.peak_l, e.peak_c, e.peak_r);
-    const hits = z ? e[`hits_${z}`] : 0;
-    meta.textContent = `${new Date(e.created_at).toLocaleTimeString()} · peak ${pk} · ${hits} hit${hits === 1 ? "" : "s"}${e.pir ? " · PIR" : ""}${e.night ? " · night" : ""}`;
+    meta.textContent = `${fmtTime(new Date(e.created_at).getTime(), true)} · ${ALARMS.has(e.event) ? "alarm" : e.event === "NOISE" ? "ignored" : "logged"}`;
     body.append(what, meta);
     const zone = document.createElement("span");
     zone.className = "zone";
     const zz = ZONE_BY_LETTER[e.zone];
-    zone.textContent = zz ? zz.name : "–";
-    if (zz) { zone.style.borderColor = zz.color; zone.style.color = "var(--ink)"; }
+    if (zz) { const d = document.createElement("i"); d.style.background = zz.color; zone.append(d); }
+    zone.append(document.createTextNode(zz ? zz.name : "–"));
     li.append(ic, body, zone);
     return li;
   }));
@@ -432,9 +473,7 @@ function demoWindow(t) {
 function demoInit() {
   state.minutes = []; state.events = []; state.latest = null;
   const now = Date.now();
-  state.hours = 24;
   for (let t = now - 24 * 3600e3; t <= now; t += 2000) addWindow(demoWindow(t));
-  state.hours = +$("range").querySelector('[aria-checked="true"]').dataset.h;
   // one fresh alarm so the preview shows the alarm state
   const w = demoWindow(now); w.event = "PERSON"; w.zone = "C"; w.pir = true; w.peak_c = 71; w.hits_c = 4;
   addWindow(w);
@@ -452,8 +491,18 @@ function setConn(kind, text) {
   if (kind) { c.classList.toggle("on", kind === "on"); c.classList.toggle("off", kind === "off"); }
   if (text) $("conn-text").textContent = text;
 }
+function setEyebrow() {
+  const d = new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+  $("eyebrow-date").textContent = `${d} · ${state.device}`;
+}
 function tickClock() {
-  $("clock").textContent = new Date().toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  $("clock").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+function moveThumb() {
+  const seg = $("range"), b = seg.querySelector('[aria-checked="true"]'), th = seg.querySelector(".seg-thumb");
+  if (!b || !b.offsetWidth) return;
+  th.style.width = `${b.offsetWidth}px`;
+  th.style.transform = `translateX(${b.offsetLeft}px)`;
 }
 function groupPeaks(mins, ms) {
   if (ms <= 60e3) return mins;
@@ -466,7 +515,9 @@ function groupPeaks(mins, ms) {
   }
   return out;
 }
-function fmtTime(t) { return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+function fmtTime(t, secs) {
+  return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(secs && { second: "2-digit" }) });
+}
 function ago(s) {
   if (s < 60) return `${Math.max(1, Math.round(s))} s ago`;
   if (s < 3600) return `${Math.round(s / 60)} min ago`;
@@ -486,7 +537,6 @@ $("theme-btn").addEventListener("click", () => {
   const next = dark ? "light" : "dark";
   applyTheme(next);
   try { localStorage.setItem("gw-theme", next); } catch { /* private mode */ }
-  render();
 });
 
 boot();
