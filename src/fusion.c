@@ -3,13 +3,20 @@
  * The magnetometer and microphone were dropped, so vehicles are no longer a
  * separate class and digging is judged from the piezos alone.
  *
- *   Event       Piezo                          PIR
- *   Wind/rain   any                            no    -> ignore
- *   Digging     strong, DIG_HITS or more hits  yes   -> alarm
- *   Person      medium, regular rhythm         yes   -> alarm
- *   Animal      weak or irregular              yes   -> log only
+ *   Event       Piezo                                    PIR
+ *   Wind/rain   any                                      no    -> ignore
+ *   Person      medium, regular rhythm                   yes   -> alarm
+ *   Digging     strong, DIG_HITS+ hits, not regular      yes   -> alarm
+ *   Animal      weak or irregular                        yes   -> log only
+ *
+ * Once tools/train_tree.py has written src/tree.c from labelled recordings,
+ * the Makefile builds with -DGW_TREE and the trained tree replaces the three
+ * piezo rules. The PIR rule always stays.
  */
 #include "fusion.h"
+#ifdef GW_TREE
+#include "tree.h"
+#endif
 
 /* zone = sensor that felt it first; a tie goes to the stronger peak */
 uint8_t fusion_zone(const window_t *w)
@@ -43,7 +50,15 @@ uint8_t fusion_classify(const window_t *w, uint8_t z)
     pk = w->peak[z];
 
     if (!w->pir) return EV_NOISE;
-    if (pk >= STRONG_PEAK && w->hits[z] >= DIG_HITS) return EV_DIGGING;
-    if (pk >= MED_PEAK && regular(w, z))                  return EV_PERSON;
+#ifdef GW_TREE
+    /* a tree trained on this board's recordings (tools/train_tree.py) */
+    tree_features((const window_t __idata *)w, z);   /* main's window is in __idata */
+    return tree_predict();
+#else
+    /* person first: firm footsteps also have strong peaks and 3+ hits, and
+     * checking digging first called a third of real walkers DIGGING */
+    if (pk >= MED_PEAK && regular(w, z))                     return EV_PERSON;
+    if (pk >= STRONG_PEAK && w->hits[z] >= DIG_HITS)         return EV_DIGGING;
     return EV_ANIMAL;
+#endif
 }

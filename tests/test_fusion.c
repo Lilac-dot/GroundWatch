@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "fusion.h"
+/* tests the hand rules: build without GW_TREE */
 
 static int fails;
 
@@ -56,6 +57,9 @@ int main(void)
     w = quiet(); hits(&w, 1, 2, 150, 0, 0); w.gap_min[1] = 150 / 8; w.gap_max[1] = 700 / 8;
     w.pir = 1;
     expect("two strong hits = not digging", &w, 1, EV_PERSON);
+
+    w = quiet(); hits(&w, 1, 4, 150, 500, 0); w.pir = 1;
+    expect("strong but steady steps = person, not digging", &w, 1, EV_PERSON);
 
     w = quiet(); hits(&w, 2, 1, 150, 0, 0); w.pir = 1;
     expect("one strong hit = animal", &w, 2, EV_ANIMAL);

@@ -9,6 +9,12 @@ CC       = $(SDCC_BIN)/sdcc
 PACKIHX  = $(SDCC_BIN)/packihx
 CFLAGS   = -mmcs51 --model-small --iram-size 256 --code-size 8192 --std-sdcc11 -Isrc
 SRCS     = main.c sense.c adc0808.c fusion.c uart.c lcd.c
+# a classifier trained on board recordings (tools/train_tree.py) switches itself on
+ifneq ($(wildcard src/tree.c),)
+SRCS    += tree.c
+CFLAGS  += -DGW_TREE
+TREE_TEST = cc $(HOST_SDK) -Wall -Wextra -Isrc -Itests tests/test_tree.c src/tree.c -o build/test_tree && ./build/test_tree
+endif
 HDRS     = $(wildcard src/*.h)
 
 all: build/groundwatch.hex
@@ -32,6 +38,7 @@ HOST_SDK = $(if $(wildcard /Library/Developer/CommandLineTools/SDKs/MacOSX15.sdk
 test: build
 	cc $(HOST_SDK) -Wall -Wextra -Isrc tests/test_fusion.c src/fusion.c -o build/test_fusion
 	./build/test_fusion
+	$(TREE_TEST)
 	cc $(HOST_SDK) -Wall -Wextra -Isrc -Itests -include tests/host_8051.h \
 	   tests/test_sense.c tests/sense_sim.c tests/host_8051.c src/sense.c src/adc0808.c src/fusion.c \
 	   -lm -o build/test_sense

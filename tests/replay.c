@@ -7,8 +7,9 @@
  *   ./build/replay recordings/footstep_20261123_101500.csv [--pir 0|1] [--night]
  *
  * Input: CSV with a header and columns t_ms,L,C,R (8-bit ADC counts, one row
- * per ~1 ms), as written by tools/groundwatch_raw.py. The PIR isn't recorded,
- * so --pir sets it for the whole file (default 1: someone was there).
+ * per ~1 ms), as written by tools/groundwatch_raw.py, or a .bin file of raw
+ * L,C,R byte triplets (used by tools/footprintid_features.py). The PIR isn't
+ * recorded, so --pir sets it for the whole file (default 1: someone was there).
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -55,11 +56,20 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "--pir") && i + 1 < argc) pir = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--night")) night = 1;
     }
-    if (!(f = fopen(argv[1], "r"))) { perror(argv[1]); return 1; }
-    if (!fgets(line, sizeof line, f)) return 1;           /* header */
+    size_t len = strlen(argv[1]);
+    int bin = len > 4 && !strcmp(argv[1] + len - 4, ".bin");
+    if (!(f = fopen(argv[1], bin ? "rb" : "r"))) { perror(argv[1]); return 1; }
+    if (!bin && !fgets(line, sizeof line, f)) return 1;   /* header */
 
-    while (fgets(line, sizeof line, f)) {
-        if (sscanf(line, "%u,%u,%u,%u", &t, &l, &c, &r) != 4) continue;
+    for (;;) {
+        if (bin) {
+            unsigned char b[3];
+            if (fread(b, 1, 3, f) != 3) break;
+            l = b[0]; c = b[1]; r = b[2];
+        } else {
+            if (!fgets(line, sizeof line, f)) break;
+            if (sscanf(line, "%u,%u,%u,%u", &t, &l, &c, &r) != 4) continue;
+        }
         if (n == 0) {
             sim_init(l, c, r, 200);
             if (night) sense_set_threshold(TRIG_MIN_NIGHT);

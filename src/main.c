@@ -29,10 +29,12 @@ static __bit night;
 static __bit alarm_on;
 static __bit display_dirty;
 
-static uint8_t  last_ev = EV_NONE;
-static uint8_t  last_zone = ZONE_NONE;
-static uint8_t  last_peak, last_hits;
-static uint16_t alarm_until;
+/* main-loop state lives in indirect RAM: the direct RAM below 0x80 is kept
+ * for the sampling ISR (and the trained classifier, when there is one) */
+static __idata uint8_t  last_ev = EV_NONE;
+static __idata uint8_t  last_zone = ZONE_NONE;
+static __idata uint8_t  last_peak, last_hits;
+static __idata uint16_t alarm_until;
 
 static __idata window_t win;
 
