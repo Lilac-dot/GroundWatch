@@ -18,8 +18,12 @@
  *   event OFF when STA < max(minimum / 2, 1.5 x LTA)   (hysteresis)
  * The ratios follow the 2.7 on / 1.8 off used by embedded STA/LTA pickers;
  * they are shifts and adds because the ISR can't call the multiply routine.
- * An event onset is a "hit". Its time (1 ms resolution) gives the first-hit
- * order for localization, and onset-to-onset gaps give the walking rhythm.
+ * An event onset is a "hit" unless it comes within HIT_DEADTIME_MS of the
+ * previous hit (the same step still ringing). Its time (1 ms resolution) gives
+ * the first-hit order for localization, and onset-to-onset gaps give the
+ * walking rhythm. The gap from the last step of the previous window is kept
+ * (if under STEP_CARRY_MS), so a walk split by a window boundary still shows
+ * its rhythm.
  *
  * Raw mode (P3.3 grounded at reset): the UART runs at 57600 baud and the ISR
  * writes every sample straight to SBUF as L, C, R, 0xFF (sync), one byte per
@@ -53,7 +57,7 @@ typedef struct {
     uint8_t  peak;      /* largest |deviation| inside events */
     uint8_t  hits;      /* event onsets */
     uint16_t active;    /* ms inside events */
-    uint16_t last;      /* ms of the latest onset */
+    uint16_t last;      /* ms_ticks at the latest counted onset (kept across windows) */
     uint16_t first;     /* ms of the first onset, FIRST_NONE = none */
     uint8_t  gap_min, gap_max;   /* onset-to-onset gaps, 8 ms units */
 } piezo_t;
@@ -68,6 +72,9 @@ static void piezo_reset(void)
 {
     uint8_t i;
     for (i = 0; i < N_PIEZO; i++) {
+        /* forget a step too old to carry over, so a 16-bit wrap of ms_ticks
+         * (every 65 s) can never make it look recent again */
+        if ((uint16_t)(ms_ticks - pz[i].last) > STEP_CARRY_MS) pz[i].last = ms_ticks - 0x8000u;
         pz[i].peak    = 0;
         pz[i].hits    = 0;
         pz[i].active  = 0;
@@ -115,18 +122,20 @@ static void piezo_reset(void)
             if (sta_q4[I] > on_q4[I]) {                                       \
                 piezo_t __idata *p = &pz[I];                                  \
                 TRIG = 1;                                                     \
+                uint16_t g = (uint16_t)(ms_ticks - p->last);                  \
                 if (d > p->peak) p->peak = d;                                 \
-                if (p->hits == 0) {                                           \
-                    p->first = win_ms;                                        \
-                    p->hits  = 1;                                             \
-                    p->last  = win_ms;                                        \
-                } else if ((uint16_t)(win_ms - p->last) >= HIT_DEADTIME_MS) { \
-                    uint16_t g = (uint16_t)(win_ms - p->last) >> 3;           \
-                    uint8_t  g8 = (g < 254) ? (uint8_t)g : 254;               \
-                    if (g8 < p->gap_min) p->gap_min = g8;                     \
-                    if (g8 > p->gap_max) p->gap_max = g8;                     \
+                /* closer than the dead time = the same step ringing again */ \
+                if (g >= HIT_DEADTIME_MS) {                                   \
+                    if (p->hits == 0) p->first = win_ms;                      \
+                    /* the gap to the previous step counts even when that */  \
+                    /* step fell in the previous window (STEP_CARRY_MS)  */   \
+                    if (p->hits || g < STEP_CARRY_MS) {                       \
+                        uint8_t g8 = (g < 254 * 8) ? (uint8_t)(g >> 3) : 254; \
+                        if (g8 < p->gap_min) p->gap_min = g8;                 \
+                        if (g8 > p->gap_max) p->gap_max = g8;                 \
+                    }                                                         \
                     if (p->hits < 255) p->hits++;                             \
-                    p->last = win_ms;                                         \
+                    p->last = ms_ticks;                                       \
                 }                                                             \
             }                                                                 \
         } else {                                                              \
@@ -209,6 +218,8 @@ void sense_init(void)
     }
     trig0 = trig1 = trig2 = 0;
     ldr = adc_read(CH_LDR);
+    ms_ticks = 0;
+    for (i = 0; i < N_PIEZO; i++) pz[i].last = 0x8000u;   /* no previous step */
     piezo_reset();
 
     /* prime the pipeline: the first slot collects IN0 */

@@ -42,6 +42,21 @@ static void run(const scene_t *s, int ms, window_t *last)
     *last = w;
 }
 
+static void check(const char *name, int ok, const window_t *w);
+
+/* steps on C at the given times (ms from now), quiet otherwise; returns the
+ * next two windows. Assumes the caller is at a window boundary. */
+static void scene(const int *ts, int n, window_t *w1, window_t *w2)
+{
+    for (int t = 0; t < 2 * WINDOW_MS; t++) {
+        double c = 0;
+        for (int k = 0; k < n; k++) c += step(t, ts[k], 70);
+        sim_ms(clamp(REST + noise(2)), clamp(REST + c + noise(2)), clamp(REST + noise(2)), 200);
+        if (t + 1 == WINDOW_MS) sim_window(w1);
+    }
+    sim_window(w2);
+}
+
 static void check(const char *name, int ok, const window_t *w)
 {
     printf("%s %-44s hits %3u %3u %3u  first %5u %5u %5u  peak %3u %3u %3u  gaps %3u-%3u ms  lta %u %u %u\n",
@@ -90,6 +105,31 @@ int main(void)
     check("wind stops: back to quiet, no hits", w.hits[0] + w.hits[1] + w.hits[2] == 0, &w);
     run(&walk, 2000, &w);
     check("  and sensitive again: 4 hits on C", w.hits[1] == 4, &w);
+
+    /* ---- hit counting and carried gaps (steps at given times on C) ---- */
+    {
+        /* run one window boundary-aligned scene: steps on C at the given ms
+         * offsets (relative to the start of window 1), 2 windows long */
+        #define SCENE(...) do { int ts[] = { __VA_ARGS__ }; scene(ts, sizeof ts / sizeof ts[0], &w1, &w2); } while (0)
+        window_t w1, w2;
+
+        run(&quiet, 4000, &w);                 /* settle; 2 whole windows, so scenes start on a boundary */
+        SCENE(300, 450);                       /* heel, then toe 150 ms later */
+        check("one step with a double impact = 1 hit (dead time)", w1.hits[1] == 1, &w1);
+
+        SCENE(1700, 2200);                     /* a 500 ms step pair across the boundary */
+        check("boundary split: 1st window has 1 step, no gap", w1.hits[1] == 1 && w1.gap_min[1] == T8_NONE, &w1);
+        check("boundary split: 2nd window carries the 500 ms gap", w2.hits[1] == 1 && w2.gap_min[1] * 8 >= 488 && w2.gap_min[1] * 8 <= 512, &w2);
+        w2.pir = 1;
+        check("  ... so the 2nd window is a PERSON", fusion_classify(&w2, fusion_zone(&w2)) == EV_PERSON, &w2);
+
+        SCENE(100, 3900);                      /* 3.8 s apart: too long to carry */
+        check("step 3.8 s after the last one: no carried gap", w2.hits[1] == 1 && w2.gap_min[1] == T8_NONE, &w2);
+
+        run(&quiet, 70000, &w);                /* > 65.5 s: ms counter wraps (35 whole windows) */
+        SCENE(1000);
+        check("after a 16-bit ms wrap, an old step isn't carried", w1.hits[1] == 1 && w1.gap_min[1] == T8_NONE, &w1);
+    }
 
     /* detection rate vs step size in wind (noise +-20): 10 windows x 4 steps */
     printf("\ndetection in wind (noise +-20, LTA ~10): step amplitude -> steps found\n");

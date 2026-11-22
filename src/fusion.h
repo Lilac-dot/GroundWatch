@@ -22,5 +22,7 @@ typedef struct {
 
 uint8_t fusion_zone(const window_t *w);                 /* 0..2 or ZONE_NONE */
 uint8_t fusion_classify(const window_t *w, uint8_t z);  /* EV_* */
+uint8_t fusion_regular(const window_t *w, uint8_t z);   /* steady step rhythm on zone z */
+uint8_t fusion_night(uint8_t night, uint8_t ldr);       /* day/night with hysteresis */
 
 #endif

@@ -60,7 +60,11 @@
 
 /* ---------------- Timing (ms) ---------------- */
 #define WINDOW_MS       2000    /* classify period */
-#define HIT_DEADTIME_MS 100     /* onsets closer than this count as one hit */
+#define HIT_DEADTIME_MS 250     /* onsets closer than this are one step ringing twice;
+                                   real steps are >= ~330 ms apart even running */
+#define STEP_CARRY_MS   1500    /* a step this soon after the previous window's last
+                                   step still gives a gap (slow walking ~1.2 s) */
+#define PIR_WARMUP_MS   60000u  /* HC-SR501 output is unreliable for ~1 min after power-on */
 #define ALARM_MS        3000
 
 /* ---------------- Event trigger (STA/LTA, see sense.c) ----------------
@@ -75,7 +79,8 @@
 #define STRONG_PEAK     100     /* shovel / heavy impact */
 
 /* ---------------- Other sensors ---------------- */
-#define DIG_HITS        3       /* strong hits per window that mean digging */
+#define DIG_HITS        3       /* strong hits per window that mean digging
+                                   (unvalidated: needs recordings of real digging) */
 #define LDR_DARK        60      /* below this = night (LDR to 5 V, 10k to GND) */
 #define LDR_LIGHT       80      /* above this = day (hysteresis) */
 

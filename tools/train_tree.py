@@ -75,8 +75,8 @@ def features(df):
     out["peak_z"] = pz
     out["snr_z"] = np.minimum(255, (pz * 4) // (noise[r, z] + 1))
     out["ms_per_hit"] = np.where(hz > 0, act[r, z] // np.maximum(hz, 1), 0)
-    out["gap_min"] = np.where(hz >= 2, gmin[r, z], 0)
-    out["gap_max"] = np.where(hz >= 2, gmax[r, z], 0)
+    out["gap_min"] = gmin[r, z]                     # 0 when the window logged no gap ('-')
+    out["gap_max"] = gmax[r, z]
     # longest gap / shortest gap, x16 (16 = perfectly regular); 0 below 3 hits
     out["irregular"] = np.where(hz >= 3, np.minimum(255, (gmax[r, z] * 16) // np.maximum(gmin[r, z], 8)), 0)
     f = np.where(hits > 0, first, -1)
@@ -88,7 +88,8 @@ def features(df):
 
 def rule_baseline(F):
     """The hand-written rules in src/fusion.c (with PIR present)."""
-    reg = (F.hits_z == 2) | ((F.hits_z >= 3) & (F.irregular <= 32))
+    # fusion_regular(): at least one gap (in-window or carried) and longest <= 2 x shortest
+    reg = (F.hits_z > 0) & (F.gap_min > 0) & (F.gap_max <= 2 * F.gap_min)
     return np.select(
         [F.hits_max == 0, (F.peak_z >= MED_PEAK) & reg, (F.peak_z >= STRONG_PEAK) & (F.hits_z >= DIG_HITS)],
         ["BACKGROUND", "PERSON", "DIGGING"], "ANIMAL")
@@ -202,8 +203,8 @@ void tree_features(const window_t __idata *w, uint8_t z)
     f->snr_z = ((uint16_t)w->peak[z] * 4) / d;
     if (f->snr_z > 255) f->snr_z = 255;
     f->ms_per_hit = hz ? w->active[z] / hz : 0;
-    f->gap_min = (hz >= 2) ? gmin : 0;
-    f->gap_max = (hz >= 2) ? gmax : 0;
+    f->gap_min = (w->gap_min[z] != T8_NONE) ? gmin : 0;
+    f->gap_max = (w->gap_min[z] != T8_NONE) ? gmax : 0;
     if (hz >= 3) {{
         d = (gmin < 8) ? 8 : gmin;
         f->irregular = (gmax * 16) / d;

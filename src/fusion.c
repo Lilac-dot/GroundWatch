@@ -34,12 +34,21 @@ uint8_t fusion_zone(const window_t *w)
 }
 
 /* Footsteps come at a steady pace: the longest gap is at most 2x the shortest.
- * Two hits give one gap, which is regular by definition. */
-static uint8_t regular(const window_t *w, uint8_t z)
+ * Needs at least one gap: two hits in the window, or one hit whose gap to the
+ * previous window's last step was carried over (sense.c). A single gap is
+ * steady by definition. */
+uint8_t fusion_regular(const window_t *w, uint8_t z)
 {
-    if (w->hits[z] < 2) return 0;
-    if (w->hits[z] == 2) return 1;
-    return w->gap_max[z] <= 2 * w->gap_min[z];
+    if (w->hits[z] == 0 || w->gap_min[z] == T8_NONE) return 0;
+    return w->gap_max[z] <= 2 * (uint16_t)w->gap_min[z];
+}
+
+/* LDR hysteresis: night below LDR_DARK, day again above LDR_LIGHT */
+uint8_t fusion_night(uint8_t night, uint8_t ldr)
+{
+    if (!night && ldr < LDR_DARK)  return 1;
+    if (night  && ldr > LDR_LIGHT) return 0;
+    return night;
 }
 
 uint8_t fusion_classify(const window_t *w, uint8_t z)
@@ -57,7 +66,7 @@ uint8_t fusion_classify(const window_t *w, uint8_t z)
 #else
     /* person first: firm footsteps also have strong peaks and 3+ hits, and
      * checking digging first called a third of real walkers DIGGING */
-    if (pk >= MED_PEAK && regular(w, z))                     return EV_PERSON;
+    if (pk >= MED_PEAK && fusion_regular(w, z))              return EV_PERSON;
     if (pk >= STRONG_PEAK && w->hits[z] >= DIG_HITS)         return EV_DIGGING;
     return EV_ANIMAL;
 #endif

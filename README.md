@@ -34,7 +34,7 @@ event on  when STA > max(minimum, 3 x LTA)
 event off when STA < max(minimum / 2, 1.5 x LTA)
 ```
 
-An event onset is a hit. Its time (1 ms resolution) gives the first-hit order for localization, and the gaps between onsets give the walking rhythm. Per 2 s window each piezo reports peak, hits, time inside events, first onset, shortest and longest gap, and background level. Raw samples are never stored, so this fits in a few dozen bytes of RAM. In the ucsim simulator the interrupt uses about 62% of the CPU.
+An event onset is a hit, unless it comes within 250 ms of the previous hit: that is the same footstep ringing twice, since real steps are at least about 330 ms apart even when running. Its time (1 ms resolution) gives the first-hit order for localization, and the gaps between onsets give the walking rhythm. The gap from the previous window's last step is carried over (up to 1.5 s), so a walk split by a window boundary still shows its rhythm. Per 2 s window each piezo reports peak, hits, time inside events, first onset, shortest and longest gap, and background level. Raw samples are never stored, so this fits in a few dozen bytes of RAM. In the ucsim simulator the interrupt uses about 62% of the CPU.
 
 **Raw mode.** With P3.3 jumpered to GND at reset, the board also streams every sample to the PC at 57600 baud (L, C, R, then a 0xFF sync byte). `tools/groundwatch_raw.py` records these into labelled CSV files for building a dataset, and `build/replay` runs any recording through the same detector code on the PC.
 
@@ -56,12 +56,14 @@ The PIR is polled rather than wired to INT0: the HC-SR501 output is active high,
 | Condition | Event | Action |
 |---|---|---|
 | No piezo hit | none | log |
-| No PIR detection | noise (wind, rain) | log |
+| No PIR detection (and none during the PIR's first 60 s after power-on) | noise (wind, rain) | log |
 | Medium peaks at a steady rhythm | person | alarm |
 | Strong peaks (`STRONG_PEAK`), at least `DIG_HITS` hits, not steady | digging | alarm |
 | Anything else with PIR detection | animal | log |
 
-"Steady rhythm" means the longest gap between hits is at most twice the shortest. Footsteps pass this check; random taps from small animals usually fail it. At night the LDR lowers the minimum trigger level.
+"Steady rhythm" means there is at least one step gap (in the window, or carried from the previous one) and the longest gap is at most twice the shortest. Footsteps pass this check; random taps from small animals usually fail it. At night (LDR below 60, back to day above 80) the minimum trigger level drops.
+
+Every rule is tested on both sides of its threshold (`tests/test_fusion.c`), and the detector is tested on synthetic footsteps, wind, double impacts, window boundaries and counter wrap-around (`tests/test_sense.c`). `MED_PEAK`, `STRONG_PEAK`, `DIG_HITS` and `TRIG_MIN_*` are starting values. They depend on the amplifier gain and the soil, so set them from board recordings. The digging rule in particular hasn't been checked against real digging.
 
 ## Repository layout
 

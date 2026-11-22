@@ -19,7 +19,7 @@ typedef struct {
     uint16_t peak_z;      /* peak |deviation| on z */
     uint16_t snr_z;       /* peak x 4 / (background + 1), max 255 */
     uint16_t ms_per_hit;  /* time inside events per hit on z */
-    uint16_t gap_min;     /* shortest / longest gap between hits on z, ms (0 below 2 hits) */
+    uint16_t gap_min;     /* shortest / longest gap between steps on z, ms (0 if none) */
     uint16_t gap_max;
     uint16_t irregular;   /* gap_max x 16 / gap_min (16 = steady), 0 below 3 hits */
     uint16_t spread_ms;   /* first onset on the last zone minus on the first, max 2000 */

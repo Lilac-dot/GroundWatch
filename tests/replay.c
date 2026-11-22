@@ -34,8 +34,8 @@ static void print_window(const window_t *w, int pir, int night)
     for (int i = 0; i < 3; i++) printf(",%u", w->hits[i]);
     for (int i = 0; i < 3; i++) printf(",%u", w->active[i]);
     for (int i = 0; i < 3; i++) w->first[i] == FIRST_NONE ? printf(",-") : printf(",%u", w->first[i]);
-    for (int i = 0; i < 3; i++) w->hits[i] < 2 ? printf(",-") : printf(",%u", w->gap_min[i] * 8);
-    for (int i = 0; i < 3; i++) w->hits[i] < 2 ? printf(",-") : printf(",%u", w->gap_max[i] * 8);
+    for (int i = 0; i < 3; i++) w->gap_min[i] == T8_NONE ? printf(",-") : printf(",%u", w->gap_min[i] * 8);
+    for (int i = 0; i < 3; i++) w->gap_min[i] == T8_NONE ? printf(",-") : printf(",%u", w->gap_max[i] * 8);
     for (int i = 0; i < 3; i++) printf(",%u", w->noise[i]);
     printf(",%d,%d,0\n", pir, night);
 }

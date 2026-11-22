@@ -24,6 +24,8 @@ static __code const char zone_char[N_PIEZO] = { 'L', 'C', 'R' };
 /* ======================= shared state ======================= */
 
 static __bit pir_seen;                   /* PIR was high at some poll this window */
+static __bit pir_ready;                  /* PIR warm-up over (PIR_WARMUP_MS after boot) */
+static __idata uint16_t boot_ms;
 static __bit pir_now;                    /* PIR level at the last poll, for the LCD */
 static __bit night;
 static __bit alarm_on;
@@ -58,15 +60,15 @@ static void log_window(uint8_t ev, uint8_t z)
         if (win.first[i] == FIRST_NONE) uart_putc('-');
         else                            uart_putu(win.first[i]);
     }
-    for (i = 0; i < N_PIEZO; i++) {      /* gaps need 2+ hits, '-' otherwise */
-        uart_putc(',');
-        if (win.hits[i] < 2) uart_putc('-');
-        else                 uart_putu(win.gap_min[i] * 8u);
+    for (i = 0; i < N_PIEZO; i++) {      /* step gaps (incl. one carried from the */
+        uart_putc(',');                  /* previous window), '-' if none */
+        if (win.gap_min[i] == T8_NONE) uart_putc('-');
+        else                           uart_putu(win.gap_min[i] * 8u);
     }
     for (i = 0; i < N_PIEZO; i++) {
         uart_putc(',');
-        if (win.hits[i] < 2) uart_putc('-');
-        else                 uart_putu(win.gap_max[i] * 8u);
+        if (win.gap_min[i] == T8_NONE) uart_putc('-');
+        else                           uart_putu(win.gap_max[i] * 8u);
     }
     for (i = 0; i < N_PIEZO; i++) { uart_putc(','); uart_putu(win.noise[i]); }
     uart_putc(','); uart_putu(win.pir);
@@ -96,19 +98,25 @@ static void task_pir_light(void)
 {
     uint8_t l = sense_ldr();
 
-    if (PIR_ACTIVE()) pir_seen = 1;
-    if (PIR_ACTIVE() != pir_now) {       /* show "Motion" on the idle screen */
+    uint8_t n;
+
+    /* the HC-SR501 settles for about a minute after power-on and its output
+     * can sit high meanwhile: until then it counts as "no PIR", so nothing
+     * can raise an alarm on a warm-up glitch */
+    if (!pir_ready && (uint16_t)(millis() - boot_ms) >= PIR_WARMUP_MS) {
+        pir_ready = 1;
+        display_dirty = 1;
+    }
+    if (pir_ready && PIR_ACTIVE()) pir_seen = 1;
+    if ((pir_ready && PIR_ACTIVE()) != pir_now) {   /* "Motion" on the idle screen */
         pir_now = !pir_now;
         display_dirty = 1;
     }
 
-    if (!night && l < LDR_DARK) {
-        night = 1;
-        sense_set_threshold(TRIG_MIN_NIGHT);
-        display_dirty = 1;
-    } else if (night && l > LDR_LIGHT) {
-        night = 0;
-        sense_set_threshold(TRIG_MIN_DAY);
+    n = fusion_night(night, l);
+    if (n != night) {
+        night = n;
+        sense_set_threshold(n ? TRIG_MIN_NIGHT : TRIG_MIN_DAY);
         display_dirty = 1;
     }
 }
@@ -119,7 +127,7 @@ static void task_classify(void)
     uint8_t z, ev;
 
     sense_take_window(&win);
-    win.pir   = (pir_seen || PIR_ACTIVE()) ? 1 : 0;
+    win.pir   = (pir_seen || (pir_ready && PIR_ACTIVE())) ? 1 : 0;
     win.night = night;
     pir_seen  = 0;
 
@@ -162,7 +170,8 @@ static void task_display(void)
 
     /* line 0: "PERSON   Zone C" while alarming, else "Listening   DAY" ("Motion" while the PIR is high) */
     lcd_print_line(0, alarm_on ? ev_name[last_ev] :
-                      pir_now ? "Motion" : sense_raw_mode() ? "Raw 57600" : "Listening");
+                      pir_now ? "Motion" : sense_raw_mode() ? "Raw 57600" :
+                      pir_ready ? "Listening" : "PIR warm-up");
     if (alarm_on) {
         lcd_puts_at(0, 9, "Zone ");
         lcd_putc(zone_char[last_zone]);
@@ -212,6 +221,7 @@ void main(void)
     lcd_print_line(0, "GroundWatch");
     lcd_print_line(1, "Calibrating...");
 
+    boot_ms = millis();
     delay_ms(1500);                      /* let the piezo baselines settle */
     if (!sense_raw_mode()) uart_puts("GW,ready\r\n");
 
