@@ -53,4 +53,19 @@ replay: build
 clean:
 	rm -rf build
 
-.PHONY: all test clean replay
+# wiring self-test firmware (no multimeter needed): flash build/selftest.hex
+selftest: build/selftest.hex
+
+build/st:
+	mkdir -p build/st
+
+build/st/%.rel: selftest/%.c $(HDRS) | build/st
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/st/%.rel: src/%.c $(HDRS) | build/st
+	$(CC) $(CFLAGS) -c $< -o $@
+
+build/selftest.ihx: build/st/selftest.rel build/st/lcd.rel build/st/uart.rel
+	$(CC) $(CFLAGS) $^ -o $@
+
+.PHONY: all test clean replay selftest

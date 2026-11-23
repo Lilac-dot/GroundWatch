@@ -88,6 +88,8 @@ tools/
   groundwatch_raw.py raw-mode recorder (labelled CSV)
   train_tree.py      train the classifier on recordings, export src/tree.c
   footprintid_features.py  check the detector on the FootprintID walking dataset
+esp32/           ESP32 bridge: reads the 8051 log on GPIO16, explains each window over USB
+selftest/        wiring self-test firmware (make selftest), selftest.hex ready to flash
 dashboard/       live web dashboard (static HTML/JS, reads Supabase)
 database/
   schema.sql     Supabase table, summary view and access rules
