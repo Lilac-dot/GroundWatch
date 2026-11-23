@@ -1,19 +1,54 @@
 # GroundWatch: wiring connections
 
-The current list of every connection on the board. It matches the firmware pin map in [`src/config.h`](src/config.h).
+Every connection on the board, as built. It matches the firmware pin map in [`src/config.h`](src/config.h).
 
-**Design as of Nov 2026:** 8051 (AT89S52, 11.0592 MHz), PIR, LDR, three piezo discs through LM358 amplifiers, ADC0809, 16×2 LCD, buzzer and LED. The **magnetometer and microphone have been removed**. The **PIR connects directly** with no inverter.
+**Design as of Nov 2026:** 8051 (AT89S52 / P89V51, 11.0592 MHz), HC-SR501 PIR, LDR, three piezo discs through LM358 amplifiers, ADC0809 with a 74LS74 clock divider, 16×2 LCD, buzzer and LED. The magnetometer and microphone have been removed. The PIR connects directly with no inverter.
 
 | Subsystem | Status |
 |---|---|
-| LDR divider | built; IN4 wire goes in with the ADC |
-| PIR | power connected; OUT → P3.2 pending |
-| 16×2 LCD + contrast pot | pending |
-| Buzzer + BC548, LED | pending |
-| ADC0809 + 74LS74 clock | deferred (waiting on jumper wires) |
-| Piezo + LM358 amplifiers | circuit values still to be finalized |
+| Power rails + 100 nF decoupling | built |
+| 16×2 LCD + contrast pot | built |
+| PIR → P3.2 | built |
+| Alarm LED | built |
+| Buzzer + BC547 | built |
+| LDR divider → IN4 | built |
+| Port 0 pull-ups | built |
+| 74LS74 clock divider | built |
+| ADC0809 | built |
+| 2.5 V reference (VREF) | built |
+| Piezo L + amplifier → IN0 | built |
+| Piezo C + amplifier → IN1 | pending (IN1 tied to VREF until built) |
+| Piezo R + amplifier → IN2 | pending (IN2 tied to VREF until built) |
 
-> Power off before changing any wire. All grounds are common. Physical pin numbers below are the standard DIP pinouts, so check each one against the datasheet for your exact part and find pin 1 from the notch or dot.
+> Power off before changing any wire. All grounds are common. Pin numbers are the standard DIP pinouts: find pin 1 from the notch or dot, and check against the datasheet for your exact part.
+
+---
+
+## Parts list
+
+| Part | Qty | Used for |
+|---|---|---|
+| AT89S52 / P89V51 board, 11.0592 MHz | 1 | controller |
+| ADC0809 (or ADC0808) | 1 | 8-channel 8-bit ADC |
+| 74LS74 (or 74HC74) | 1 | ADC clock divider |
+| LM358N | 2 | piezo amplifiers (3 of the 4 op-amps used) |
+| Piezo disc | 3 | vibration sensors, one per zone |
+| HC-SR501 PIR | 1 | body detection |
+| LDR | 1 | day / night |
+| 16×2 LCD (HD44780) | 1 | local display |
+| 10 kΩ pot (marked 103) | 1 | LCD contrast |
+| BC547 (or BC548) | 1 | buzzer switch |
+| Buzzer (5 V active) | 1 | alarm |
+| LED | 1 | alarm |
+| 1N4148 diode | 6 | piezo input protection (2 per channel) |
+| 100 nF ceramic capacitor (marked 104) | 4 | decoupling, one per IC |
+| 10 µF electrolytic capacitor | 1 | VREF smoothing |
+| 10 kΩ resistor | 17 | see sections below |
+| 1 kΩ resistor | 5 | see sections below |
+| 1 MΩ resistor | 3 | piezo bias |
+| USB-UART adapter | 1 | PC logging (optional if the board has its own serial port) |
+
+Only 1 kΩ, 10 kΩ and 1 MΩ resistors are used. Values differ slightly from the original design (330 Ω LED resistor, 4.7 kΩ buzzer pull-up, 100 kΩ feedback): the substitutes below work the same way.
 
 ---
 
@@ -21,85 +56,120 @@ The current list of every connection on the board. It matches the firmware pin m
 
 | From | To |
 |---|---|
-| +5 V (regulated) | 8051 board VCC, ADC0809 pin 11 (VCC), ADC0809 pin 12 (VREF+), 74LS74 pin 14, LM358 pin 8 (both chips), PIR VCC, LCD pin 2, LDR, LED, buzzer + |
-| GND | 8051 board GND, ADC0809 pin 13 (GND), ADC0809 pin 16 (VREF−), 74LS74 pin 7, LM358 pin 4 (both chips), PIR GND, LCD pins 1 and 5, 10 kΩ LDR resistor, BC548 emitter, USB-UART GND |
-| 100 nF capacitor | across VCC and GND at each IC (ADC0809, 74LS74, each LM358), as close to the pins as possible |
+| +5 V (board header) | breadboard + rail (join both halves of each rail) |
+| GND (board header) | breadboard − rail |
+| +5 V | ADC0809 pins 11 and 12, 74LS74 pins 1, 4, 10, 13, 14, LM358 pin 8 (both), PIR VCC, LCD pins 2 and 15, LDR, LED resistor, buzzer +, Port 0 pull-ups, buzzer pull-up, VREF divider |
+| GND | ADC0809 pins 13 and 16, 74LS74 pins 7, 11, 12, LM358 pin 4 (both), PIR GND, LCD pins 1, 5, 16, LDR 10 kΩ, BC547 emitter, VREF divider, USB-UART GND |
 
-## 2. LDR (light level) → ADC IN4
+**Decoupling:** one 100 nF (104) capacitor as close as possible to each chip:
 
-| From | To |
+| Chip | Between |
 |---|---|
-| LDR leg 1 | +5 V |
-| LDR leg 2 | sense junction |
-| 10 kΩ leg 1 | sense junction |
-| 10 kΩ leg 2 | GND |
-| Sense junction | ADC0809 IN4 (pin 2), connected together with the ADC |
+| ADC0809 | pin 11 ↔ pin 13 |
+| 74LS74 | pin 14 ↔ pin 7 |
+| LM358 #1 | pin 8 ↔ pin 4 |
+| LM358 #2 | pin 8 ↔ pin 4 |
 
-The junction voltage rises with light. Firmware: below `LDR_DARK` = night (more sensitive piezo threshold), above `LDR_LIGHT` = day.
-
-## 3. PIR (HC-SR501) → P3.2
-
-| PIR pin | To | Notes |
-|---|---|---|
-| VCC | +5 V | module accepts 4.5–20 V |
-| GND | GND | |
-| OUT | **8051 P3.2, direct** | active high: about 3.3 V on motion, 0 V idle. The AT89S52 reads anything above about 1.9 V as high, so no level shifter or inverter is needed. |
-
-- **No BC547/BC548 inverter on the PIR.** The firmware treats P3.2 high as motion and checks the pin every 10 ms.
-- **Add a 10 kΩ resistor from P3.2 to GND.** The 8051 has a weak internal pull-up, so if the PIR wire comes loose, an unconnected P3.2 reads high and the board sees motion all the time. With the resistor, a loose wire reads as "no motion". The PIR still drives the pin high easily.
-- Set the module's jumper to **H (repeat trigger)** and turn the **time-delay pot fully counter-clockwise** (shortest hold).
-- After power-on, the HC-SR501 needs **about 60 s to settle** before its readings are reliable.
-
-## 4. 16×2 LCD (HD44780, 4-bit mode) → Port 2
+## 2. 16×2 LCD (HD44780, 4-bit mode) → Port 2
 
 | LCD pin | Name | To |
 |---|---|---|
 | 1 | VSS | GND |
 | 2 | VDD | +5 V |
-| 3 | VO | contrast pot wiper (middle pin) |
+| 3 | VO | contrast pot middle pin (outer pins to +5 V and GND) |
 | 4 | RS | P2.0 |
-| 5 | RW | GND (write-only) |
+| 5 | RW | GND (write only) |
 | 6 | E | P2.1 |
 | 7–10 | D0–D3 | not connected |
 | 11 | D4 | P2.4 |
 | 12 | D5 | P2.5 |
 | 13 | D6 | P2.6 |
 | 14 | D7 | P2.7 |
-| 15 | LED+ (A) | +5 V. Most modules already have a backlight resistor (often 100 Ω, marked R8). If yours doesn't, add about 100 Ω in series. |
-| 16 | LED− (K) | GND |
+| 15 | LED+ | +5 V (module has its own backlight resistor) |
+| 16 | LED− | GND |
 
-**Contrast pot (5 kΩ or 10 kΩ):** one outer pin to +5 V, the other outer pin to GND, and the middle pin to LCD pin 3. If you see a row of solid blocks or a blank screen, turn the pot.
+No pot? LCD pin 3 → 1 kΩ → GND also gives readable text. Never leave pin 3 unconnected. If you see a blank screen or a row of solid blocks, turn the pot.
 
-## 5. Buzzer (BC548 low-side switch) → P2.2
+## 3. PIR (HC-SR501) → P3.2
 
-| From | To |
-|---|---|
-| 8051 P2.2 | 4.7 kΩ pull-up to +5 V **and** a 1 kΩ resistor to the BC548 base |
-| BC548 emitter | GND |
-| BC548 collector | buzzer − |
-| Buzzer + | +5 V (or the buzzer's rated supply) |
-| 1N4148 diode (only for a magnetic/inductive buzzer) | across the buzzer, cathode (band) to + |
-
-- Firmware: **P2.2 high = buzzer on.** The buzzer beeps on and off while the alarm is active.
-- **Why the 4.7 kΩ pull-up:** a high 8051 port pin only supplies tens of µA, which isn't enough base current to switch the transistor fully on. With the pull-up, about 0.7 mA flows into the base. When the pin is low, it only has to sink about 1 mA.
-- The BC548's leg order (C-B-E) varies by manufacturer. Check the datasheet for your part's markings before wiring.
-
-## 6. Alarm LED → P2.3 (active low)
-
-```
-+5 V ── 330 Ω ── LED anode (long leg) ── LED cathode (flat side) ── P2.3
-```
-
-Firmware: **P2.3 low = LED on.** The pin sinks about 10 mA, which is within the 8051's limit.
-
-## 7. ADC0809 → 8051 (deferred)
-
-| ADC0809 pin | Signal | To |
+| PIR pin | To | Notes |
 |---|---|---|
-| 26, 27, 28 | IN0, IN1, IN2 | left, centre and right piezo amplifier outputs |
-| 1 | IN3 | GND (unused, was the microphone) |
-| 2 | IN4 | LDR sense junction |
-| 3, 4, 5 | IN5, IN6, IN7 | GND (unused) |
+| VCC | +5 V | accepts 4.5–20 V |
+| GND | GND | |
+| OUT | P3.2, direct | active high: about 3.3 V on motion, 0 V idle. The 8051 reads above about 1.9 V as high, so no transistor or level shifter is needed. |
+
+Set the jumper to **H** (repeat trigger) and turn the time-delay pot fully anticlockwise. The module needs about 60 s after power-on to settle; the LCD shows `PIR warm-up` meanwhile.
+
+## 4. Alarm LED → P2.3 (active low)
+
+```
++5 V ── 1 kΩ ── LED anode (long leg) ── LED cathode (short leg) ── P2.3
+```
+
+P2.3 low = LED on. About 3 mA, well within the 8051's sink limit.
+
+## 5. Buzzer (BC547 low-side switch) → P2.2
+
+BC547 pins, flat side facing you, legs down: **C – B – E** (left to right).
+
+| From | Through | To |
+|---|---|---|
+| P2.2 | 10 kΩ | +5 V (pull-up) |
+| P2.2 | 1 kΩ | BC547 base (B) |
+| BC547 emitter (E) | wire | GND |
+| BC547 collector (C) | wire | buzzer − |
+| Buzzer + | wire | +5 V |
+| 1N4148 across the buzzer, band to + | | only for a magnetic buzzer |
+
+```
+ +5V ──10k──┐
+            │
+ P2.2 ──────┴──1k── B   BC547   C ── buzzer(−)   buzzer(+) ── +5V
+                                E ── GND
+```
+
+P2.2 high = buzzer on. A high 8051 pin supplies almost no current on its own, so the 10 kΩ pull-up provides the base current (about 0.4 mA, enough to switch about 40 mA).
+
+## 6. LDR (light level) → ADC IN4
+
+```
++5 V ── LDR ──┬── 10 kΩ ── GND
+              │
+        ADC0809 pin 2 (IN4)
+```
+
+The junction voltage rises with light. Below `LDR_DARK` the firmware switches to night mode (more sensitive piezo threshold).
+
+## 7. Port 0 pull-ups
+
+Port 0 is open-drain and has no internal pull-ups, and the 8051 can't enable them in software. Fit one **10 kΩ from each of P0.0, P0.1, P0.2, P0.3, P0.4 and P0.5 to +5 V** (6 resistors).
+
+Skip these only if the board already has a resistor pack on Port 0. To check: power on with nothing connected to P0 and measure P0.0 to GND. About 5 V means pull-ups are already fitted.
+
+## 8. 74LS74 clock divider → ADC CLOCK
+
+The 8051's ALE pin runs at 11.0592 MHz / 6 = 1.84 MHz, above the ADC0809's 1.28 MHz limit. One flip-flop halves it to 921.6 kHz.
+
+| 74LS74 pin | To |
+|---|---|
+| 14 | +5 V |
+| 7 | GND |
+| 3 (CLK1) | 8051 ALE pin (not PSEN) |
+| 2 (D1) | pin 6 (Q̅1): feedback that divides by 2 |
+| 5 (Q1) | ADC0809 pin 10 (CLOCK) |
+| 1 (C̅L̅R̅1), 4 (P̅R̅1) | +5 V |
+| 10 (P̅R̅2), 13 (C̅L̅R̅2) | +5 V (unused half) |
+| 11 (CLK2), 12 (D2) | GND (unused half) |
+
+## 9. ADC0809 → 8051
+
+| ADC pin | Signal | To |
+|---|---|---|
+| 11 | VCC | +5 V |
+| 12 | VREF+ | +5 V |
+| 13 | GND | GND |
+| 16 | VREF− | GND |
+| 10 | CLOCK | 74LS74 pin 5 |
 | 17 | 2⁻⁸ = D0 (LSB) | P1.0 |
 | 14 | 2⁻⁷ = D1 | P1.1 |
 | 15 | 2⁻⁶ = D2 | P1.2 |
@@ -111,55 +181,141 @@ Firmware: **P2.3 low = LED on.** The pin sinks about 10 mA, which is within the 
 | 25 | ADD A | P0.0 |
 | 24 | ADD B | P0.1 |
 | 23 | ADD C | P0.2 |
-| 22 | ALE | P0.3 |
+| 22 | ALE | P0.3 (same wire as START) |
 | 6 | START | P0.3 (same wire as ALE) |
 | 9 | OE | P0.4 |
 | 7 | EOC | P0.5 |
-| 10 | CLOCK | 74LS74 pin 5 (Q1) |
-| 11 / 13 | VCC / GND | +5 V / GND |
-| 12 / 16 | VREF+ / VREF− | +5 V / GND (0–5 V input range) |
+| 26 | IN0 | piezo L amplifier output |
+| 27 | IN1 | piezo C amplifier output (VREF until built) |
+| 28 | IN2 | piezo R amplifier output (VREF until built) |
+| 2 | IN4 | LDR junction |
+| 1, 3, 4, 5 | IN3, IN5, IN6, IN7 | GND (unused) |
 
-- **The data bits are numbered backwards.** On the ADC0809, pin 17 (labelled 2⁻⁸) is the *least* significant bit and pin 21 (2⁻¹) is the *most*.
-- **Port 0 needs pull-ups.** It is open-drain, so fit six **10 kΩ pull-ups to +5 V on P0.0–P0.5**, unless the board already has a resistor pack on Port 0. Check the board first.
+The data bits are numbered backwards on the ADC0809: pin 17 (2⁻⁸) is the least significant bit and pin 21 (2⁻¹) the most.
 
-### ADC clock: 74LS74 divide-by-2
+## 10. 2.5 V reference (VREF), shared by all three amplifiers
 
-The 8051's ALE pin runs at 11.0592 MHz / 6 = 1.84 MHz, which is above the ADC0809's 1.28 MHz limit. Halving it gives 921.6 kHz.
+```
++5 V ── 10 kΩ ──┬── 10 kΩ ── GND
+                │
+              VREF (2.5 V)
+                │
+         10 µF + leg ;  − leg (stripe) ── GND
+```
 
-| 74LS74 pin | To |
+Measure about 2.5 V from VREF to GND. Each amplifier rests at this level when nothing is moving, which the firmware learns as the baseline during `Calibrating...`.
+
+## 11. Piezo amplifiers (LM358) → ADC IN0–IN2
+
+### What the circuit does
+A footstep makes the piezo produce a small, fast signal (tens of mV). Each LM358 op-amp is a non-inverting amplifier with gain 1 + 10k/1k = **11**:
+
+```
+output = 2.5 V + 11 × (piezo signal)
+```
+
+At rest the output sits at 2.5 V (ADC reads about 128). A footstep moves it away from 2.5 V and the firmware measures how far. The LM358 output only reaches about 3.5 V on a 5 V supply, so upward swings clip about 1 V above rest; downward swings have 2.5 V of room.
+
+### LM358 pinout (DIP-8)
+
+```
+        ┌──U──┐
+ OUT A 1│     │8 +5 V
+ IN− A 2│     │7 OUT B
+ IN+ A 3│     │6 IN− B
+   GND 4│     │5 IN+ B
+        └─────┘
+```
+
+### One channel
+
+```
+                       +5 V
+                        │
+                     1N4148  (band towards +5 V)
+                        │
+Piezo red ── 10 kΩ ── [node X] ───────────── IN+
+                        │     │
+                     1N4148   1 MΩ
+                (band towards │
+                   node X)    │
+                        │     │
+                       GND    │
+Piezo black ─────────────── VREF ── 1 kΩ ── IN− ── 10 kΩ ── OUT ──► ADC input
+```
+
+**Node X** is one breadboard row where the series resistor, both diodes, the 1 MΩ and the op-amp + input meet. **Each channel has its own node X. Never join the node X of two channels**, or the signals mix and the zone can't be found. All channels share one VREF.
+
+| # | Part | From | To | Purpose |
+|---|---|---|---|---|
+| 1 | 10 kΩ | piezo red | node X | limits current from spikes |
+| 2 | 1N4148 | node X | +5 V (band at +5 V) | clamps node X below 5 V |
+| 3 | 1N4148 | GND | node X (band at node X) | clamps node X above 0 V |
+| 4 | 1 MΩ | node X | VREF | holds the input at 2.5 V at rest, drains charge |
+| 5 | wire | piezo black | VREF | the signal swings around 2.5 V |
+| 6 | wire | node X | IN+ | signal into the op-amp |
+| 7 | 1 kΩ | IN− | VREF | gain |
+| 8 | 10 kΩ | IN− | OUT | gain (feedback) |
+| 9 | wire | OUT | ADC input | amplified signal |
+
+### Pin assignment
+
+| Channel | Zone | Chip | IN+ (node X) | IN− | OUT | ADC pin |
+|---|---|---|---|---|---|---|
+| Piezo 1 | Left | LM358 #1 | 3 | 2 | 1 | 26 (IN0) |
+| Piezo 2 | Centre | LM358 #1 | 5 | 6 | 7 | 27 (IN1) |
+| Piezo 3 | Right | LM358 #2 | 3 | 2 | 1 | 28 (IN2) |
+| spare | — | LM358 #2 | 5 → GND | 6 joined to 7 | 7 | — |
+
+The spare op-amp is tied off (+ to GND, − to OUT) so it doesn't oscillate.
+
+### Checks and tuning
+
+With nothing moving, node X, IN− and OUT should all read about 2.5 V.
+
+| Symptom | Likely cause / fix |
 |---|---|
-| 3 (CLK1) | 8051 board **ALE** header (not PSEN) |
-| 2 (D1) | pin 6 (Q̅1), the feedback that makes it divide by 2 |
-| 5 (Q1) | ADC0809 pin 10 (CLOCK) |
-| 1 (C̅L̅R̅1), 4 (P̅R̅1) | +5 V |
-| 10 (P̅R̅2), 13 (C̅L̅R̅2) | +5 V (unused half) |
-| 11 (CLK2), 12 (D2) | GND (unused half) |
-| 14 / 7 | +5 V / GND |
+| OUT stuck near 0 V or 3.5 V | VREF missing, 1 kΩ / 10 kΩ on the wrong pin, or a diode reversed |
+| Taps barely show | raise the gain: change the 10 kΩ feedback to 47 kΩ or 100 kΩ |
+| Every light tap gives the maximum | lower the gain: 1 kΩ to VREF → 2.2 kΩ |
+| Random hits with nobody near | 1 MΩ missing, or loose piezo wires |
 
-A multimeter can't measure 921.6 kHz. Use a scope or logic analyser if the lab has one, or just check that ADC readings change when you turn a pot on IN0.
+> Never connect a bare piezo straight to the ADC or the op-amp: a sharp knock can produce tens of volts.
 
-## 8. Piezo discs + LM358 → ADC IN0–IN2
+## 12. Sensing platform (cardboard zones)
 
-| Piezo | Position | Amplifier → ADC |
-|---|---|---|
-| Piezo 1 | left | LM358 channel → IN0 (pin 26) |
-| Piezo 2 | centre | LM358 channel → IN1 (pin 27) |
-| Piezo 3 | right | LM358 channel → IN2 (pin 28) |
+The test platform is a strip of three cardboard squares joined by narrow strips:
 
-LM358 DIP-8 pinout: 1 OUT A, 2 IN A−, 3 IN A+, **4 GND**, 5 IN B+, 6 IN B−, 7 OUT B, **8 +5 V**. Three channels need **two LM358s**. On the spare op-amp, tie + to GND and connect − to OUT so it doesn't oscillate.
+```
+┌────────┐   ┌────────┐   ┌────────┐
+│ Zone L │═══│ Zone C │═══│ Zone R │      PIR at the side, facing across
+│   (●)  │   │   (●)  │   │   (●)  │      LDR face-up, in room light
+└────────┘   └────────┘   └────────┘
+  IN0          IN1          IN2
+```
 
-- **Never connect a bare piezo to the ADC.** A sharp knock can produce tens of volts.
-- Each channel needs a load resistor across the piezo (about 1 MΩ), input clamping, and a gain stage biased so its output stays between 0 V and 5 V. The firmware measures deviation from a resting baseline, so a mid-rail bias of about 2.5 V works best.
-- Resistor, capacitor and gain values are **still to be finalized**. Build and test one channel before copying it to the other two.
+- One piezo glued or taped firmly under the centre of each square.
+- Keep the joining strips narrow so a step on one square shakes its neighbours less.
+- Twist each piezo's two wires together and label them L, C, R.
+- Test: a tap on the left square must appear first in `peakL` / `firstL`. If it shows in another channel, swap the wires at the amplifier inputs.
 
-## 9. Serial log (optional) → P3.1
+## 13. Serial log → P3.1
 
 | From | To |
 |---|---|
 | 8051 P3.1 (TXD) | USB-UART adapter RX |
 | 8051 GND | USB-UART GND |
 
-Settings are 9600 baud, 8N1, and one line every 2 s. In raw mode it's 57600 baud, binary. Run `python3 tools/groundwatch_pc.py <port>` to log and plot. If you use the board's own DB9/RS-232 port instead, it already connects to TXD, so don't add a TTL adapter at the same time.
+9600 baud, 8N1, one `EV,...` line every 2 s. Open it with PuTTY or `python tools/groundwatch_pc.py <port>`. If you use the board's own DB9 / USB serial port instead, it is already wired to TXD, so don't connect a second adapter.
+
+## 14. Raw-mode jumper → P3.3
+
+| P3.3 at reset | Mode |
+|---|---|
+| unconnected | normal: classification at 9600 baud |
+| jumpered to GND | raw: every sample streamed at 57600 baud for `tools/groundwatch_raw.py` |
+
+Leave P3.3 unconnected for normal use.
 
 ---
 
@@ -167,38 +323,30 @@ Settings are 9600 baud, 8N1, and one line every 2 s. In raw mode it's 57600 baud
 
 | Pin | Use | Direction |
 |---|---|---|
-| P0.0–P0.2 | ADC ADD A, B, C | out (pull-ups) |
-| P0.3 | ADC ALE + START | out (pull-up) |
-| P0.4 | ADC OE | out (pull-up) |
-| P0.5 | ADC EOC | in (pull-up) |
+| P0.0–P0.2 | ADC ADD A, B, C | out (10 kΩ pull-ups) |
+| P0.3 | ADC ALE + START | out (10 kΩ pull-up) |
+| P0.4 | ADC OE | out (10 kΩ pull-up) |
+| P0.5 | ADC EOC | in (10 kΩ pull-up) |
 | P1.0–P1.7 | ADC D0–D7 | in |
 | P2.0 | LCD RS | out |
 | P2.1 | LCD E | out |
-| P2.2 | Buzzer (high = on) | out |
+| P2.2 | buzzer (high = on) | out |
 | P2.3 | LED (low = on) | out |
 | P2.4–P2.7 | LCD D4–D7 | out |
 | P3.1 | UART TXD | out |
-| P3.2 | PIR OUT (high = motion), 10 kΩ to GND | in |
-| P3.3 | raw-mode jumper (GND at reset = raw) | in |
+| P3.2 | PIR OUT (high = motion) | in |
+| P3.3 | raw-mode jumper | in |
 | ALE | 74LS74 CLK1 | clock out |
 
 Free pins: P3.0, P3.4–P3.7, P0.6, P0.7.
 
-## Raw-mode jumper (optional) → P3.3
-
-| From | To |
-|---|---|
-| 8051 P3.3 | GND through a jumper, only when you want raw mode |
-
-Leave P3.3 open for normal operation. The internal pull-up reads it as high. If P3.3 is grounded at power-up or reset, the board streams every piezo sample to the PC at **57600 baud**, and the LCD shows `Raw 57600`. Record the stream with `python3 tools/groundwatch_raw.py PORT --label footstep`. Detection, the LCD and the alarm keep working. Only the text log is replaced.
-
 ## Bring-up order
 
-1. With power off, check polarity, shorts, IC orientation and the common ground.
-2. Wire the **LCD and contrast pot**, then flash the firmware. The firmware still runs without the ADC. You should see `GroundWatch / Calibrating...`, then `Listening   DAY / No events`.
-3. Connect **PIR OUT → P3.2**. Wait 60 s, then wave a hand in front of it. The top line should change to `Motion`.
-4. Add the **LED and buzzer**.
-5. Wire the **ADC0809 and 74LS74**. Test with a pot on IN0 (ends to +5 V and GND, wiper to IN0) and watch the serial log.
-6. Connect the **LDR junction to IN4**.
-7. Build **one piezo channel** on IN0 and check it, then add the centre and right channels.
+1. Power off: check polarity, shorts, chip orientation and the common ground. Measure 5 V on the rails.
+2. LCD + contrast pot. Flash the firmware: `GroundWatch` / `Calibrating...`, then `PIR warm-up`, then `Listening   DAY` / `No events`.
+3. PIR → P3.2. After 60 s, wave a hand: the top line shows `Motion`.
+4. LED and buzzer.
+5. Port 0 pull-ups, 74LS74 and ADC0809. Connect the LDR junction to IN4 and cover the LDR: the last number in the serial line (`ldr`) should drop.
+6. VREF, then the left piezo channel on IN0, with IN1 and IN2 tied to VREF. Tap the left square: `peakL` and `hitsL` rise.
+7. Centre and right channels.
 8. Record real events with `tools/groundwatch_pc.py --label ...` and tune the thresholds in `src/config.h`.
