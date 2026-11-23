@@ -92,7 +92,6 @@ database/
   schema.sql     Supabase table, summary view and access rules
 docs/
   slides.pdf     project presentation
-  hardware_connections.md   older wiring checklist (.docx alongside)
 ```
 
 ## Hardware
@@ -111,7 +110,7 @@ The firmware needs about 4 KB of flash and uses the upper 128 bytes of internal 
 
 ### Pin map
 
-**Wiring:** [`connections.md`](connections.md) has every connection for the current design, with physical pin numbers and the bring-up order. The older checklist in [`docs/hardware_connections.md`](docs/hardware_connections.md) also covers power, decoupling and the clock divider.
+**Wiring:** [`connections.md`](connections.md) has every connection for the current design, with physical pin numbers and the bring-up order.
 
 | Signal | Pin | Notes |
 |---|---|---|

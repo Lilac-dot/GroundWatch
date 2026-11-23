@@ -26,8 +26,9 @@
  * P3.3       <- raw-mode jumper: GND at reset streams raw samples at 57600
  * P3.0 / P3.1 <-> UART RXD / TXD to USB-UART module
  * P2.0 RS, P2.1 EN, P2.4-P2.7 D4-D7 -> 16x2 LCD (RW to GND)
- * P2.2       -> buzzer through BC547 / BC548 low-side switch (high = on)
- * P2.3       -> alarm LED, active low (5 V -> 330R -> LED -> pin)
+ * P2.2       -> buzzer through BC547 low-side switch (high = on):
+ *               10k pull-up to 5 V on P2.2, 1k into the base
+ * P2.3       -> alarm LED, active low (5 V -> 1k -> LED -> pin, ~3 mA)
  */
 #define ADC_DATA        P1
 #define ADC_A           P0_0
@@ -54,7 +55,13 @@
 #define LED_ON          0
 #define LED_OFF         1
 
-/* ---------------- ADC0808 channels ---------------- */
+/* ---------------- ADC0808 channels ----------------
+ * Each piezo goes through an LM358 non-inverting stage, gain 11, biased at a
+ * shared 2.5 V VREF: at rest the ADC reads ~128 and the baseline tracks it.
+ * The LM358 only swings up to ~3.5 V on 5 V, so upward deviations clip at
+ * ~50 counts; downward ones have the full ~128. Peaks above ~50 (STRONG_PEAK)
+ * therefore come from the downward half of the ringing, which piezos always have.
+ * Until a channel is built its input is tied to VREF and reads ~0 deviation. */
 #define N_PIEZO         3       /* IN0 = zone L, IN1 = zone C, IN2 = zone R */
 #define CH_LDR          4       /* IN3, IN5-IN7 unused */
 
