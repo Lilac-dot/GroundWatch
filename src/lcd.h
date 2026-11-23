@@ -1,6 +1,6 @@
 #ifndef LCD_H
 #define LCD_H
-#include <stdint.h>
+#include "mcu.h"
 
 void lcd_init(void);                     /* needs the 1 ms tick running */
 void lcd_goto(uint8_t row, uint8_t col);

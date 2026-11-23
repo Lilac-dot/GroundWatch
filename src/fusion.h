@@ -1,6 +1,6 @@
 #ifndef FUSION_H
 #define FUSION_H
-#include <stdint.h>
+#include "mcu.h"
 #include "config.h"
 
 #define T8_NONE    0xFF            /* "never" for the 8 ms-unit gap fields */

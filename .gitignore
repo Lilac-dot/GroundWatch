@@ -6,3 +6,9 @@ datasets/
 
 # personal-use display fonts (Macelon demo, Bollity): not redistributable
 dashboard/fonts/
+
+# Keil uVision output and per-user settings
+keil/Objects/
+keil/Listings/
+*.uvguix.*
+*.uvoptx

@@ -78,9 +78,6 @@ uint8_t fusion_classify(const window_t *w, uint8_t z)
  * ALARM_CONFIRM of them are set and it isn't sounding or cooling down, sounds
  * for ALARM_SOUND_WIN windows (counting the one that confirmed it), then rests
  * for ALARM_QUIET_WIN windows. */
-#ifndef __SDCC
-#define __idata
-#endif
 static __idata uint8_t al_hist, al_sound, al_quiet;
 
 void alarm_reset(void) { al_hist = 0; al_sound = 0; al_quiet = 0; }

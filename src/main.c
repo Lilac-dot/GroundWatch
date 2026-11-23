@@ -208,9 +208,17 @@ static void task_display(void)
 /* ======================= scheduler ======================= */
 
 #define N_TASKS 3
-static void (* __code const task_fn[N_TASKS])(void) = {
-    task_pir_light, task_display, task_classify
-};
+/* Called directly, not through a function-pointer table: Keil's linker
+ * can't see calls made through pointers and may then share those functions'
+ * local variables with main's (overlaying). */
+static void run_task(uint8_t i)
+{
+    switch (i) {
+    case 0:  task_pir_light(); break;
+    case 1:  task_display();   break;
+    default: task_classify();  break;
+    }
+}
 static __code const uint16_t task_period[N_TASKS] = { 10, 200, WINDOW_MS };
 static __idata uint16_t task_left[N_TASKS];
 
@@ -252,7 +260,7 @@ void main(void)
         for (i = 0; i < N_TASKS; i++) {
             if (task_left[i] <= el) {
                 task_left[i] = task_period[i];
-                task_fn[i]();
+                run_task(i);
             } else {
                 task_left[i] -= el;
             }

@@ -73,6 +73,7 @@ Every rule is tested on both sides of its threshold (`tests/test_fusion.c`), and
 connections.md   every wire for the current design
 src/
   config.h       pin map, thresholds, event codes (the only file you should need to edit)
+  mcu.h          compiler compatibility: the same code builds in SDCC, Keil C51 and on the host
   main.c         scheduler and tasks
   sense.c        1 ms tick and per-channel feature extraction (ISR)
   fusion.c       zone selection and rule table (plain C, unit-tested on the host)
@@ -144,6 +145,21 @@ make clean
 Flash `build/groundwatch.hex` with the programmer for your board (for example a USBasp with `avrdude -p 89s52`, or a serial bootloader for the P89V51).
 
 A VS Code workspace is included: `Cmd/Ctrl+Shift+B` builds, and the other tasks (tests, serial logger, demo plot) are under *Terminal > Run Task*.
+
+### Building in Keil uVision (Windows)
+
+The same source files also build in Keil C51; `src/mcu.h` handles the differences between the two compilers. Edit the code in either one, but keep it working in both.
+
+1. *Project > New uVision Project*, and save it in a new `keil` folder inside the repo.
+2. Device: **Microchip (Atmel) > AT89S52** (or NXP P89V51RD2 for that board). When it asks to copy `STARTUP.A51` into the project, click **No**.
+3. In the Project window, right-click *Source Group 1 > Add Existing Files*, and add these six files from `src`: `main.c`, `sense.c`, `adc0808.c`, `fusion.c`, `lcd.c`, `uart.c`. (The `.h` files are picked up automatically.)
+4. *Project > Options for Target*:
+   - **Target** tab: Xtal (MHz) = `11.0592`, Memory Model = `Small`.
+   - **Output** tab: tick **Create HEX File**.
+   - **C51** tab: Include Paths = `..\src`.
+5. Build with **F7**. The file to flash is `keil\Objects\<project name>.hex`.
+
+The free evaluation version of Keil C51 only builds programs up to 2 KB, and this firmware is about 6 KB. The lab PCs need a licensed copy, otherwise the build stops with a code size limit error. Keil's output files (`Objects/`, `Listings/`, per-user settings) are git-ignored.
 
 ## Logging and tuning
 

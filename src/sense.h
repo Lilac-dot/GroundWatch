@@ -1,6 +1,6 @@
 #ifndef SENSE_H
 #define SENSE_H
-#include <stdint.h>
+#include "mcu.h"
 #include "fusion.h"
 
 /* Timer0 at 4 kHz: four slots (piezo L, C, R, LDR), each channel at ~1 kHz,
@@ -15,7 +15,10 @@ uint8_t  sense_raw_mode(void);                   /* 1 = raw streaming, no text l
 void     sense_take_window(window_t *w);         /* copy piezo features, start a new window */
 uint8_t  sense_ldr(void);                        /* latest LDR reading */
 
-/* SDCC needs ISR prototypes visible in the file that holds main() */
+/* SDCC needs ISR prototypes visible in the file that holds main().
+ * Keil doesn't, and doesn't expect one. */
+#ifndef __C51__
 void timer0_isr(void) __interrupt(1) __using(1);
+#endif
 
 #endif

@@ -2,13 +2,9 @@
  * exported to src/tree.c (integer comparisons only). */
 #ifndef TREE_H
 #define TREE_H
-#include <stdint.h>
+#include "mcu.h"
 #include "config.h"
 #include "fusion.h"
-
-#ifndef __SDCC
-#define __idata                 /* host builds (make test) */
-#endif
 
 /* Integer features of one window, for the zone z that felt it first.
  * Field order matches FEATURES in tools/train_tree.py. */

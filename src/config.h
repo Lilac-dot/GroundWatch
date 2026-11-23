@@ -8,10 +8,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#ifdef __SDCC
-#include <8052.h>
-#endif
-#include <stdint.h>
+#include "mcu.h"            /* chip header + stdint for SDCC, Keil or host */
 
 /* ---------------- Pin map (slide 4) ----------------
  * P1.0-P1.7  <- ADC0809 / ADC0808 D0..D7 (D0 = LSB, ADC pin 17 is "2^-8" = LSB)

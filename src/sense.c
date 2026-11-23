@@ -121,8 +121,8 @@ static void piezo_reset(void)
         if (!(TRIG)) {                                                        \
             if (sta_q4[I] > on_q4[I]) {                                       \
                 piezo_t __idata *p = &pz[I];                                  \
-                TRIG = 1;                                                     \
                 uint16_t g = (uint16_t)(ms_ticks - p->last);                  \
+                TRIG = 1;                                                     \
                 if (d > p->peak) p->peak = d;                                 \
                 /* closer than the dead time = the same step ringing again */ \
                 if (g >= HIT_DEADTIME_MS) {                                   \
