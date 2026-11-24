@@ -7,6 +7,7 @@ GroundWatch PC side: live log + plot of the 8051's 2-second windows.
     python3 tools/groundwatch_pc.py PORT --label footstep     # tag rows while recording
     python3 tools/groundwatch_pc.py --demo                    # fake data, no hardware
     python3 tools/groundwatch_pc.py PORT --cloud              # also upload to Supabase
+    python3 tools/groundwatch_pc.py ESP32_PORT --baud 115200 --cloud   # via esp32/groundwatch_bridge
 
 Every row in the CSV is one window. Plot the peaks per class to pick the
 thresholds in src/config.h (TRIG_MIN_*, MED_PEAK, STRONG_PEAK, DIG_HITS).
@@ -41,6 +42,8 @@ HISTORY = 60          # windows on screen (2 min)
 
 def parse(line):
     """'EV,PERSON,C,87,...' -> dict, or None for anything else"""
+    if line.startswith("8051> "):                   # via the ESP32 bridge (115200 baud)
+        line = line[6:]
     if not line.startswith("EV,"):
         return None
     vals = line.split(",")[1:]

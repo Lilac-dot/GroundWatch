@@ -10,15 +10,21 @@ Every connection on the board, as built. It matches the firmware pin map in [`sr
 | 16×2 LCD + contrast pot | built |
 | PIR → P3.2 | built |
 | Alarm LED | built |
-| Buzzer + BC547 | built |
+| Buzzer + BC547 | built, **unplugged** until the board has a real 5 V supply (see Power notes) |
 | LDR divider → IN4 | built |
 | Port 0 pull-ups | built |
 | 74LS74 clock divider | built |
 | ADC0809 | built |
 | 2.5 V reference (VREF) | built |
 | Piezo L + amplifier → IN0 | built |
-| Piezo C + amplifier → IN1 | pending (IN1 tied to VREF until built) |
-| Piezo R + amplifier → IN2 | pending (IN2 tied to VREF until built) |
+| Piezo C + amplifier → IN1 | pending (IN1 tied to **GND** until built) |
+| Piezo R + amplifier → IN2 | pending (IN2 tied to **GND** until built) |
+
+### Power notes (bring-up, 24 Nov 2026)
+
+- Powered from the laptop through the board's USB programmer (the ATmega8A section), the "5 V" rail measures only **~4.2 V**. The AT89S52 needs ≥ 4.0 V, so it runs, but with no margin.
+- **Buzzer:** at reset every port pin is high, so P2.2 switches the buzzer on before `main()` can turn it off. On the 4.2 V supply that current drops the rail below 4.0 V and the 8051 never starts (LCD flickers, buzzer rings, no serial). Keep the buzzer's + wire unplugged until the board gets a real 5 V (phone charger + cut USB cable into the 5 V / GND header pins; never together with the board's USB).
+- **Amplifier supply:** the LM358(s), the top 10 kΩ of the VREF divider and the upper 1N4148 clamps run from a separate **AMP +** rail fed by the ESP32's **VIN** pin (~5 V). Everything else stays on the board's rail. Grounds are common. VREF then measures ~2.6 V. Don't leave the ESP32 powered with the 8051 board off.
 
 > Power off before changing any wire. All grounds are common. Pin numbers are the standard DIP pinouts: find pin 1 from the notch or dot, and check against the datasheet for your exact part.
 
@@ -186,8 +192,8 @@ The 8051's ALE pin runs at 11.0592 MHz / 6 = 1.84 MHz, above the ADC0809's 1.28 
 | 9 | OE | P0.4 |
 | 7 | EOC | P0.5 |
 | 26 | IN0 | piezo L amplifier output |
-| 27 | IN1 | piezo C amplifier output (VREF until built) |
-| 28 | IN2 | piezo R amplifier output (VREF until built) |
+| 27 | IN1 | piezo C amplifier output (**GND** until built) |
+| 28 | IN2 | piezo R amplifier output (**GND** until built) |
 | 2 | IN4 | LDR junction |
 | 1, 3, 4, 5 | IN3, IN5, IN6, IN7 | GND (unused) |
 
@@ -347,6 +353,6 @@ Free pins: P3.0, P3.4–P3.7, P0.6, P0.7.
 3. PIR → P3.2. After 60 s, wave a hand: the top line shows `Motion`.
 4. LED and buzzer.
 5. Port 0 pull-ups, 74LS74 and ADC0809. Connect the LDR junction to IN4 and cover the LDR: the last number in the serial line (`ldr`) should drop.
-6. VREF, then the left piezo channel on IN0, with IN1 and IN2 tied to VREF. Tap the left square: `peakL` and `hitsL` rise.
+6. VREF, then the left piezo channel on IN0, with IN1 and IN2 tied to GND. (Tied to VREF, IN1 dragged VREF down to ~2 V on our ADC and IN2 echoed every left tap, so the zone came out wrong.) Tap the left square: `peakL` and `hitsL` rise.
 7. Centre and right channels.
 8. Record real events with `tools/groundwatch_pc.py --label ...` and tune the thresholds in `src/config.h`.

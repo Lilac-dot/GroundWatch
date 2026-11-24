@@ -89,6 +89,8 @@ tools/
   train_tree.py      train the classifier on recordings, export src/tree.c
   footprintid_features.py  check the detector on the FootprintID walking dataset
 esp32/           ESP32 bridge: reads the 8051 log on GPIO16, explains each window over USB
+  circuit_doctor/  guided board check with one probe (GPIO32 via 10k): voltages, clocks, ADC, 8051 log
+  piezo_test/      standalone piezo / amplifier tester
 selftest/        wiring self-test firmware (make selftest), selftest.hex ready to flash
 dashboard/       live web dashboard (static HTML/JS, reads Supabase)
 database/
