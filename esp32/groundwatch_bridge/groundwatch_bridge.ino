@@ -41,6 +41,52 @@ struct Win {
 
 static const char ZN[3] = { 'L', 'C', 'R' };
 
+/* ---- software UART receiver (9600 8N1) ----
+ * On our board the ESP32's hardware UARTs misread the 8051's line even though
+ * the signal itself is clean (every bit measures 104 us), so the bridge
+ * timestamps edges in an interrupt and decodes the frames itself. */
+#define BIT_US   (1000000UL / GW_BAUD)
+#define NEDGE    2048
+static volatile uint32_t eT[NEDGE];
+static volatile uint8_t  eL[NEDGE];
+static volatile uint32_t eHead = 0;
+static uint32_t eTail = 0;
+
+static void IRAM_ATTR onEdge()
+{
+  uint32_t h = eHead;
+  eT[h % NEDGE] = micros();
+  eL[h % NEDGE] = (uint8_t)digitalRead(GW_RX_PIN);
+  eHead = h + 1;
+}
+
+/* level of the line at time t, searching edges from index i */
+static int levelAt(uint32_t i, uint32_t head, uint32_t t)
+{
+  while (i + 1 < head && (int32_t)(eT[(i + 1) % NEDGE] - t) <= 0) i++;
+  return eL[i % NEDGE];
+}
+
+/* next received byte, or -1 if none is complete yet */
+static int softRead()
+{
+  uint32_t head = eHead;
+  if (head - eTail > NEDGE) eTail = head - NEDGE;          /* overrun: drop old edges */
+  while (eTail < head) {
+    if (eL[eTail % NEDGE] != 0) { eTail++; continue; }      /* need a falling edge (start bit) */
+    uint32_t t0 = eT[eTail % NEDGE];
+    if ((int32_t)(micros() - (t0 + BIT_US * 10)) < 0) return -1;   /* frame not finished */
+    uint8_t c = 0;
+    for (int k = 0; k < 8; k++)
+      c |= levelAt(eTail, head, t0 + BIT_US * 3 / 2 + BIT_US * k) << k;
+    uint32_t tend = t0 + BIT_US * 9 + BIT_US / 2;            /* skip edges inside the frame */
+    eTail++;
+    while (eTail < head && (int32_t)(eT[eTail % NEDGE] - tend) < 0) eTail++;
+    return c;
+  }
+  return -1;
+}
+
 static String   line;
 static uint32_t lastRx = 0, lastNag = 0;
 static uint32_t nWin = 0, nLines = 0, nGarbage = 0;
@@ -149,7 +195,8 @@ static void explain(const Win &w)
 void setup()
 {
   Serial.begin(115200);
-  Serial2.begin(GW_BAUD, SERIAL_8N1, GW_RX_PIN, -1);   /* RX only */
+  pinMode(GW_RX_PIN, INPUT);
+  attachInterrupt(digitalPinToInterrupt(GW_RX_PIN), onEdge, CHANGE);   /* software UART, RX only */
   delay(300);
   Serial.println("\nGroundWatch bridge: listening to the 8051 on GPIO16 @ 9600");
   lastRx = millis();
@@ -157,10 +204,10 @@ void setup()
 
 void loop()
 {
-  while (Serial2.available()) {
-    char c = (char)Serial2.read();
+  for (int r; (r = softRead()) >= 0; ) {
+    char c = (char)r;
     lastRx = millis();
-    if (rawSinceLine < sizeof(rawBuf)) rawBuf[rawSinceLine] = (uint8_t)c;
+    rawBuf[rawSinceLine % sizeof(rawBuf)] = (uint8_t)c;   /* ring: keeps the latest bytes */
     rawSinceLine++; rawN++;
     if (c == '\r') continue;
     if (c != '\n') {
@@ -187,7 +234,8 @@ void loop()
     lastDump = millis();
     Serial.printf("[raw: %lu bytes without a line end, total %lu] ",
                   (unsigned long)rawSinceLine, (unsigned long)rawN);
-    for (uint32_t i = 0; i < rawSinceLine && i < sizeof(rawBuf); i++) Serial.printf("%02X ", rawBuf[i]);
+    uint32_t n = rawSinceLine < sizeof(rawBuf) ? rawSinceLine : sizeof(rawBuf);
+    for (uint32_t i = rawSinceLine - n; i < rawSinceLine; i++) Serial.printf("%02X ", rawBuf[i % sizeof(rawBuf)]);
     Serial.println();
   }
 

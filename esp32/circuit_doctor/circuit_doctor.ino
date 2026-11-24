@@ -435,6 +435,70 @@ void loop() {
   } else if (in == "s") { saveRes(cur, R_SKIP, ""); cur++; }
   else if (in == "b") { if (cur > 0) cur--; }
   else if (in == "l") { summary(); }
+  else if (in == "q") {          /* same pin, UART1 instead of UART2 */
+    Serial1.begin(9600, SERIAL_8N1, PIN_RX, -1);
+    delay(20); while (Serial1.available()) Serial1.read();
+    String o; uint32_t t0 = millis();
+    while (millis() - t0 < 4500) while (Serial1.available()) { char c = Serial1.read(); o += (c >= 32 && c < 127) || c == '\n' ? c : '?'; }
+    Serial1.end();
+    Serial.print("UART1> "); Serial.println(o);
+    Serial2.begin(9600, SERIAL_8N1, PIN_RX, -1);
+    delay(20); while (Serial2.available()) Serial2.read();
+    o = ""; t0 = millis();
+    while (millis() - t0 < 4500) while (Serial2.available()) { char c = Serial2.read(); o += (c >= 32 && c < 127) || c == '\n' ? c : '?'; }
+    Serial2.end();
+    Serial.print("UART2> "); Serial.println(o);
+    return;
+  }
+  else if (in == "v") {          /* software UART: timestamp edges on GPIO16, decode 9600 8N1 */
+    static volatile uint32_t ts[6000]; static volatile uint8_t lv[6000]; static volatile int ne;
+    ne = 0;
+    pinMode(PIN_RX, INPUT);
+    attachInterrupt(digitalPinToInterrupt(PIN_RX), []() IRAM_ATTR {
+      if (ne < 6000) { ts[ne] = micros(); lv[ne] = digitalRead(PIN_RX); ne++; } }, CHANGE);
+    delay(4500);
+    detachInterrupt(digitalPinToInterrupt(PIN_RX));
+    int n = ne; String out; int j = 0;
+    auto levelAt = [&](uint32_t t) -> int {      /* level at time t from the edge list */
+      while (j + 1 < n && ts[j + 1] <= t) j++;
+      return (j < n && ts[j] <= t) ? lv[j] : 1;
+    };
+    for (int i = 0; i < n; i++) {
+      if (lv[i] != 0) continue;                 /* falling edge = start bit candidate */
+      uint32_t t0 = ts[i]; j = i; uint8_t c = 0;
+      for (int k = 0; k < 8; k++) c |= levelAt(t0 + 156 + 104 * k) << k;
+      int stop = levelAt(t0 + 156 + 104 * 8);
+      out += (c == '\n') ? String("\\n\n") : (c == '\r') ? String("\\r") : (c >= 32 && c < 127) ? String((char)c) : String("?");
+      if (!stop) out += "!";
+      uint32_t tend = t0 + 104 * 9 + 52;        /* skip edges inside this frame */
+      while (i + 1 < n && ts[i + 1] < tend) i++;
+    }
+    Serial.printf("SOFT: %d edges\n", n);
+    Serial.print("SOFT> "); Serial.println(out);
+    return;
+  }
+  else if (in == "w") {          /* measure pulse widths on GPIO16: one bit at 9600 = 104 us */
+    pinMode(PIN_RX, INPUT);
+    uint32_t lo[400], hi[400]; int nl = 0, nh = 0;
+    uint32_t t0 = millis();
+    while (millis() - t0 < 6000 && (nl < 400 || nh < 400)) {
+      unsigned long l = pulseIn(PIN_RX, LOW, 3000000);
+      if (l && nl < 400) lo[nl++] = l;
+      unsigned long h = pulseIn(PIN_RX, HIGH, 3000000);
+      if (h && h < 5000 && nh < 400) hi[nh++] = h;
+    }
+    auto stats = [](const char *nm, uint32_t *v, int n) {
+      if (!n) { Serial.printf("WIDTH %s: none\n", nm); return; }
+      uint32_t mn = 999999; for (int i = 0; i < n; i++) mn = min(mn, v[i]);
+      int hist[12] = {0}; for (int i = 0; i < n; i++) { int k = (v[i] + 52) / 104; if (k > 11) k = 11; hist[k]++; }
+      Serial.printf("WIDTH %s: n=%d min=%lu us  per-104us-bucket:", nm, n, (unsigned long)mn);
+      for (int k = 0; k < 12; k++) Serial.printf(" %d", hist[k]);
+      Serial.println();
+      Serial.printf("WIDTH %s first:", nm); for (int i = 0; i < min(n, 40); i++) Serial.printf(" %lu", (unsigned long)v[i]); Serial.println();
+    };
+    stats("LOW", lo, nl); stats("HIGH", hi, nh);
+    return;
+  }
   else if (in == "u") {          /* dump what arrives on GPIO16 at both baud rates */
     const long bauds[] = {9600, 57600};
     for (long bd : bauds) {
