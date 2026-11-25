@@ -49,7 +49,7 @@ Every connection on the board, as built. It matches the firmware pin map in [`sr
 | 1N4148 diode | 6 | piezo input protection (2 per channel) |
 | 100 nF ceramic capacitor (marked 104) | 4 | decoupling, one per IC |
 | 10 µF electrolytic capacitor | 1 | VREF smoothing |
-| 10 kΩ resistor | 17 | see sections below |
+| 10 kΩ resistor | 17 (+1 if the centre channel needs gain 21) | see sections below |
 | 1 kΩ resistor | 5 | see sections below |
 | 1 MΩ resistor | 3 | piezo bias |
 | USB-UART adapter | 1 | PC logging (optional if the board has its own serial port) |
@@ -64,7 +64,8 @@ Only 1 kΩ, 10 kΩ and 1 MΩ resistors are used. Values differ slightly from the
 |---|---|
 | +5 V (board header) | breadboard + rail (join both halves of each rail) |
 | GND (board header) | breadboard − rail |
-| +5 V | ADC0809 pins 11 and 12, 74LS74 pins 1, 4, 10, 13, 14, LM358 pin 8 (both), PIR VCC, LCD pins 2 and 15, LDR, LED resistor, buzzer +, Port 0 pull-ups, buzzer pull-up, VREF divider |
+| +5 V | ADC0809 pins 11 and 12, 74LS74 pins 1, 4, 10, 13, 14, PIR VCC, LCD pins 2 and 15, LDR, LED resistor, buzzer +, Port 0 pull-ups, buzzer pull-up |
+| AMP + (ESP32 VIN) | LM358 pin 8 (both), top 10 kΩ of the VREF divider, upper 1N4148 clamps (see Power notes) |
 | GND | ADC0809 pins 13 and 16, 74LS74 pins 7, 11, 12, LM358 pin 4 (both), PIR GND, LCD pins 1, 5, 16, LDR 10 kΩ, BC547 emitter, VREF divider, USB-UART GND |
 
 **Decoupling:** one 100 nF (104) capacitor as close as possible to each chip:
@@ -226,7 +227,7 @@ At rest the output sits at 2.5 V (ADC reads about 128). A footstep moves it away
 
 ```
         ┌──U──┐
- OUT A 1│     │8 +5 V
+ OUT A 1│     │8 AMP +
  IN− A 2│     │7 OUT B
  IN+ A 3│     │6 IN− B
    GND 4│     │5 IN+ B
@@ -236,9 +237,9 @@ At rest the output sits at 2.5 V (ADC reads about 128). A footstep moves it away
 ### One channel
 
 ```
-                       +5 V
+                  AMP + (~5 V)
                         │
-                     1N4148  (band towards +5 V)
+                     1N4148  (band towards AMP +)
                         │
 Piezo red ── 10 kΩ ── [node X] ───────────── IN+
                         │     │
@@ -255,7 +256,7 @@ Piezo black ─────────────── VREF ── 1 kΩ ─�
 | # | Part | From | To | Purpose |
 |---|---|---|---|---|
 | 1 | 10 kΩ | piezo red | node X | limits current from spikes |
-| 2 | 1N4148 | node X | +5 V (band at +5 V) | clamps node X below 5 V |
+| 2 | 1N4148 | node X | AMP + (band at AMP +) | clamps node X below 5 V |
 | 3 | 1N4148 | GND | node X (band at node X) | clamps node X above 0 V |
 | 4 | 1 MΩ | node X | VREF | holds the input at 2.5 V at rest, drains charge |
 | 5 | wire | piezo black | VREF | the signal swings around 2.5 V |
@@ -274,6 +275,59 @@ Piezo black ─────────────── VREF ── 1 kΩ ─�
 | spare | — | LM358 #2 | 5 → GND | 6 joined to 7 | 7 | — |
 
 The spare op-amp is tied off (+ to GND, − to OUT) so it doesn't oscillate.
+
+### Wiring the centre (C) and right (R) channels
+
+Left is already built on LM358 #1 pins 1–3. Centre uses the other half of the same chip, and right uses LM358 #2.
+
+**Power off first, then:**
+
+1. **Remove the GND wires from ADC pin 27 (IN1) and pin 28 (IN2).** An op-amp output wired to a grounded pin is a short.
+2. If LM358 #2 isn't fitted yet, power it:
+
+   | LM358 #2 pin | To |
+   |---|---|
+   | 8 | AMP + rail (ESP32 VIN, the same rail as LM358 #1) |
+   | 4 | GND |
+   | 100 nF (104) | pin 8 ↔ pin 4, close to the chip |
+   | 5 | GND (spare op-amp) |
+   | 6 | joined to pin 7 (spare op-amp) |
+
+3. Wire each channel. Pick a free breadboard row for each channel's **node X** and never join it to another channel's node X.
+
+**Centre (C) → LM358 #1, pins 5 / 6 / 7 → ADC pin 27 (IN1)**
+
+| # | Part | From | To |
+|---|---|---|---|
+| 1 | 10 kΩ | piezo C red | node X(C) |
+| 2 | 1N4148 | node X(C) | AMP + (band at AMP +) |
+| 3 | 1N4148 | GND | node X(C) (band at node X) |
+| 4 | 1 MΩ | node X(C) | VREF |
+| 5 | wire | piezo C black | VREF |
+| 6 | wire | node X(C) | LM358 #1 pin 5 (IN+ B) |
+| 7 | 1 kΩ | LM358 #1 pin 6 (IN− B) | VREF |
+| 8 | 10 kΩ | LM358 #1 pin 6 | LM358 #1 pin 7 (OUT B) |
+| 9 | wire | LM358 #1 pin 7 | ADC pin 27 (IN1) |
+
+**Right (R) → LM358 #2, pins 3 / 2 / 1 → ADC pin 28 (IN2)**
+
+| # | Part | From | To |
+|---|---|---|---|
+| 1 | 10 kΩ | piezo R red | node X(R) |
+| 2 | 1N4148 | node X(R) | AMP + (band at AMP +) |
+| 3 | 1N4148 | GND | node X(R) (band at node X) |
+| 4 | 1 MΩ | node X(R) | VREF |
+| 5 | wire | piezo R black | VREF |
+| 6 | wire | node X(R) | LM358 #2 pin 3 (IN+ A) |
+| 7 | 1 kΩ | LM358 #2 pin 2 (IN− A) | VREF |
+| 8 | 10 kΩ | LM358 #2 pin 2 | LM358 #2 pin 1 (OUT A) |
+| 9 | wire | LM358 #2 pin 1 | ADC pin 28 (IN2) |
+
+**Extra parts for these two channels:** 2 × 10 kΩ (series), 2 × 1 kΩ (gain), 2 × 10 kΩ (feedback), 2 × 1 MΩ, 4 × 1N4148, 1 × 100 nF (LM358 #2), plus jumpers. VREF is shared: don't build a second divider.
+
+**Smaller centre piezo.** The centre disc is smaller than the other two, so it may give a weaker signal for the same step, and the zone decision compares peaks between zones. Build it at gain 11 first, then tap L and C the same way and compare `peakL` and `peakC` in the serial log. If C peaks below about 70 % of L, replace C's 10 kΩ feedback with **two 10 kΩ in series (20 kΩ, gain 21)**. Matching gains this way calibrates the channels for sensor mismatch, so the same step reads about the same in every zone.
+
+**Check before tapping (power on, nothing touching the zones):** node X, IN− and OUT of each new channel should all read about the same as VREF (~2.5–2.6 V). Then tap L, C and R one at a time: each tap must show first in its own zone (`firstL` / `firstC` / `firstR`). If a tap shows in the wrong zone, the piezo wires are swapped at the amplifier inputs.
 
 ### Checks and tuning
 
